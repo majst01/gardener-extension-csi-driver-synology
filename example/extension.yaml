@@ -1,0 +1,8 @@
+---
+apiVersion: extensions.gardener.cloud/v1alpha1
+kind: Extension
+metadata:
+  name: extension-csi-driver-synology
+  namespace: shoot--project--mycluster
+spec:
+  type: csi-driver-synology

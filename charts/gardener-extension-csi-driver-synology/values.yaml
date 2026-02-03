@@ -1,0 +1,31 @@
+image:
+  repository: your-registry/gardener-extension-csi-driver-synology
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+synology:
+  host: ""
+  port: 5000
+  ssl: false
+  adminUsername: ""
+  adminPassword: ""
+
+chap:
+  enabled: true
+
+serviceAccount:
+  create: true
+  name: gardener-extension-csi-driver-synology
+
+rbac:
+  create: true

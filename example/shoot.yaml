@@ -1,0 +1,9 @@
+apiVersion: core.gardener.cloud/v1beta1
+kind: Shoot
+metadata:
+  name: my-cluster
+  namespace: garden-project
+spec:
+  extensions:
+  - type: csi-driver-synology
+  # ... other shoot configuration

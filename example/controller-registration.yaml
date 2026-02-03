@@ -1,0 +1,26 @@
+---
+apiVersion: core.gardener.cloud/v1beta1
+kind: ControllerRegistration
+metadata:
+  name: extension-csi-driver-synology
+spec:
+  deployment:
+    type: helm
+    providerConfig:
+      chart: <base64-encoded-helm-chart>
+      values:
+        image:
+          repository: your-registry/gardener-extension-csi-driver-synology
+          tag: v0.1.0
+        synology:
+          host: "192.168.1.100"
+          port: 5001
+          ssl: true
+          adminUsername: "admin"
+          adminPassword: "your-secure-password"
+        chap:
+          enabled: true
+  resources:
+  - kind: Extension
+    type: csi-driver-synology
+    globallyEnabled: false
