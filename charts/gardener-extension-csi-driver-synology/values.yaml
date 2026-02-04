@@ -1,5 +1,5 @@
 image:
-  repository: your-registry/gardener-extension-csi-driver-synology
+  repository: synology/synology-csi
   tag: latest
   pullPolicy: IfNotPresent
 

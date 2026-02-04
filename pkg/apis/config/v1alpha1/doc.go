@@ -1,5 +1,6 @@
 // +k8s:deepcopy-gen=package
-// +groupName=synology-csi.extensions.config.gardener.cloud
+// +k8s:conversion-gen=github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config
+// +k8s:openapi-gen=true
+// +k8s:defaulter-gen=TypeMeta
 
-// Package v1alpha1 contains the v1alpha1 version of the API.
-package v1alpha1
+package v1alpha1 // import "github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config/v1alpha1"

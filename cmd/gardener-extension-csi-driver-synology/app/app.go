@@ -4,75 +4,43 @@ import (
 	"context"
 	"fmt"
 
-	extensioncontroller "github.com/gardener/gardener/extensions/pkg/controller"
-	"github.com/gardener/gardener/extensions/pkg/controller/cmd"
-	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/constants"
-	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/controller/healthcheck"
-	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/controller/lifecycle"
 	"github.com/spf13/cobra"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // NewControllerCommand creates a new command for running the Synology CSI extension controller
 func NewControllerCommand(ctx context.Context) *cobra.Command {
-	var (
-		restOpts = &cmd.RESTOptions{}
-		mgrOpts  = &cmd.ManagerOptions{
-			LeaderElection:   true,
-			LeaderElectionID: cmd.LeaderElectionNameID(constants.ServiceName),
-		}
-		cfg = &config.Configuration{
-			SynologyPort: 5000,
-		}
-
-		aggOption = cmd.NewOptionAggregator(
-			restOpts,
-			mgrOpts,
-		)
-	)
+	options := NewOptions()
 
 	cmd := &cobra.Command{
-		Use:   constants.ServiceName,
-		Short: "Synology CSI Extension Controller",
+		Use:           constants.ExtensionName,
+		Short:         "Synology CSI Extension Controller",
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := aggOption.Complete(); err != nil {
+			if err := options.optionAggregator.Complete(); err != nil {
 				return fmt.Errorf("error completing options: %w", err)
 			}
 
-			mgr, err := manager.New(restOpts.Completed().Config, mgrOpts.Completed().Options())
-			if err != nil {
-				return fmt.Errorf("could not instantiate manager: %w", err)
+			if err := options.heartbeatOptions.Validate(); err != nil {
+				return err
 			}
 
-			if err := extensioncontroller.AddToScheme(mgr.GetScheme()); err != nil {
-				return fmt.Errorf("could not update manager scheme: %w", err)
-			}
+			cmd.SilenceUsage = true
 
-			if err := lifecycle.AddToManager(mgr, cfg); err != nil {
-				return fmt.Errorf("could not add lifecycle controller: %w", err)
-			}
-
-			if err := healthcheck.AddToManager(mgr); err != nil {
-				return fmt.Errorf("could not add healthcheck controller: %w", err)
-			}
-
-			if err := mgr.Start(ctx); err != nil {
-				return fmt.Errorf("error running manager: %w", err)
-			}
-
-			return nil
+			return options.run(ctx)
 		},
 	}
 
-	aggOption.AddFlags(cmd.Flags())
+	options.optionAggregator.AddFlags(cmd.Flags())
 
-	cmd.Flags().StringVar(&cfg.SynologyHost, "synology-host", "", "Synology NAS host")
-	cmd.Flags().IntVar(&cfg.SynologyPort, "synology-port", 5000, "Synology NAS port")
-	cmd.Flags().BoolVar(&cfg.SynologySSL, "synology-ssl", false, "Use SSL for Synology connection")
-	cmd.Flags().BoolVar(&cfg.ChapEnabled, "chap-enabled", true, "Enable CHAP authentication")
-	cmd.Flags().StringVar(&cfg.AdminUsername, "admin-username", "", "Synology admin username")
-	cmd.Flags().StringVar(&cfg.AdminPassword, "admin-password", "", "Synology admin password")
+	// aggOption.AddFlags(cmd.Flags())
+
+	// cmd.Flags().StringVar(&cfg.SynologyHost, "synology-host", "", "Synology NAS host")
+	// cmd.Flags().IntVar(&cfg.SynologyPort, "synology-port", 5000, "Synology NAS port")
+	// cmd.Flags().BoolVar(&cfg.SynologySSL, "synology-ssl", false, "Use SSL for Synology connection")
+	// cmd.Flags().BoolVar(&cfg.ChapEnabled, "chap-enabled", true, "Enable CHAP authentication")
+	// cmd.Flags().StringVar(&cfg.AdminUsername, "admin-username", "", "Synology admin username")
+	// cmd.Flags().StringVar(&cfg.AdminPassword, "admin-password", "", "Synology admin password")
 
 	return cmd
 }
