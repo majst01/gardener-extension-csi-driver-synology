@@ -239,7 +239,7 @@ func (a *Actuator) createOrUpdate(ctx context.Context, log logr.Logger, obj clie
 
 // deleteResourcesByType deletes all resources of a given type
 func (a *Actuator) deleteResourcesByType(ctx context.Context, log logr.Logger, obj client.Object, namespace string) error {
-	listOpts := []client.ListOption{
+	listOpts := []client.DeleteAllOfOption{
 		client.InNamespace(namespace),
 		client.MatchingLabels{"app.kubernetes.io/name": "synology-csi"},
 	}

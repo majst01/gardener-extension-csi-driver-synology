@@ -1,6 +1,8 @@
 package lifecycle
 
 import (
+	"context"
+
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/constants"
@@ -31,7 +33,7 @@ func AddToManagerWithOptions(mgr manager.Manager, opts AddOptions) error {
 		Name:              constants.ServiceName,
 		FinalizerSuffix:   constants.ExtensionType,
 		Resync:            0,
-		Predicates:        extension.DefaultPredicates(opts.IgnoreOperationAnnotation),
+		Predicates:        extension.DefaultPredicates(context.Background(), mgr, opts.IgnoreOperationAnnotation),
 		Type:              constants.ExtensionType,
 	})
 }

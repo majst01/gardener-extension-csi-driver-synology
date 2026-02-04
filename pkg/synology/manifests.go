@@ -239,10 +239,10 @@ func GenerateConfigMap(config *ManifestConfig) *corev1.ConfigMap {
 
 	clientInfoYAML := fmt.Sprintf(`---
 clients:
-  - host: %s
+  - host: %s://%s
     port: %d
     https: %t
-`, config.Host, config.Port, config.UseSSL)
+`, protocol, config.Host, config.Port, config.UseSSL)
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

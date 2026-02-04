@@ -4,8 +4,8 @@ import (
 	"context"
 	"os"
 
-	"github.com/gardener/gardener/cmd/utils"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/cmd/gardener-extension-csi-driver-synology/app"
+	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func main() {
@@ -14,7 +14,7 @@ func main() {
 	cmd := app.NewControllerCommand(ctx)
 
 	if err := cmd.Execute(); err != nil {
-		utils.PrintError(err)
+		runtimelog.Log.Error(err, "error executing the main controller command")
 		os.Exit(1)
 	}
 }

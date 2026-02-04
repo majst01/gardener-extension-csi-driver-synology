@@ -6,7 +6,6 @@ import (
 
 	extensioncontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/cmd"
-	"github.com/gardener/gardener/extensions/pkg/util"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/constants"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/controller/healthcheck"
@@ -20,9 +19,8 @@ func NewControllerCommand(ctx context.Context) *cobra.Command {
 	var (
 		restOpts = &cmd.RESTOptions{}
 		mgrOpts  = &cmd.ManagerOptions{
-			LeaderElection:          true,
-			LeaderElectionID:        cmd.LeaderElectionNameID(constants.ServiceName),
-			LeaderElectionNamespace: util.GetEnvOrDefault("LEADER_ELECTION_NAMESPACE", ""),
+			LeaderElection:   true,
+			LeaderElectionID: cmd.LeaderElectionNameID(constants.ServiceName),
 		}
 		cfg = &config.Configuration{
 			SynologyPort: 5000,
@@ -41,14 +39,6 @@ func NewControllerCommand(ctx context.Context) *cobra.Command {
 			if err := aggOption.Complete(); err != nil {
 				return fmt.Errorf("error completing options: %w", err)
 			}
-
-			util.ApplyClientConnectionConfigurationToRESTConfig(
-				&extensioncontroller.ClientConnection{
-					QPS:   100.0,
-					Burst: 130,
-				},
-				restOpts.Completed().Config,
-			)
 
 			mgr, err := manager.New(restOpts.Completed().Config, mgrOpts.Completed().Options())
 			if err != nil {

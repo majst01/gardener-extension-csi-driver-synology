@@ -4,9 +4,12 @@ import (
 	"github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
 	"github.com/gardener/gardener/extensions/pkg/controller/healthcheck/general"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -31,18 +34,24 @@ func AddToManagerWithOptions(mgr manager.Manager, opts AddOptions) error {
 
 	return healthcheck.DefaultRegistration(
 		constants.ExtensionType,
-		healthcheck.DefaultHealthChecks{
+		extensionsv1alpha1.SchemeGroupVersion.WithKind(extensionsv1alpha1.WorkerResource),
+		func() client.ObjectList { return &extensionsv1alpha1.WorkerList{} },
+		func() extensionsv1alpha1.Object { return &extensionsv1alpha1.Worker{} },
+		mgr,
+		opts,
+		nil,
+		[]healthcheck.ConditionTypeToHealthCheck{
 			{
-				Condition: "ControllerHealthy",
-				Check:     general.CheckManagedResource(constants.ControllerName),
+				ConditionType: "ControllerHealthy",
+				HealthCheck:   general.CheckManagedResource(constants.ControllerName),
 			},
 			{
-				Condition: "NodeHealthy",
-				Check:     general.CheckManagedResource(constants.NodeName),
+				ConditionType: "NodeHealthy",
+				HealthCheck:     general.CheckManagedResource(constants.NodeName),
 			},
 			{
-				Condition: "DeploymentHealthy",
-				Check: general.NewDeploymentChecker(&appsv1.Deployment{
+				ConditionType: "DeploymentHealthy",
+				HealthCheck: general.NewDeploymentChecker(&appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      constants.ControllerName,
 						Namespace: v1beta1constants.GardenNamespace,
@@ -50,8 +59,8 @@ func AddToManagerWithOptions(mgr manager.Manager, opts AddOptions) error {
 				}),
 			},
 			{
-				Condition: "DaemonSetHealthy",
-				Check: general.NewDaemonSetChecker(&appsv1.DaemonSet{
+				ConditionType: "DaemonSetHealthy",
+				HealthCheck: general.NewDaemonSetChecker(&appsv1.DaemonSet{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      constants.NodeName,
 						Namespace: v1beta1constants.GardenNamespace,
