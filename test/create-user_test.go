@@ -3,7 +3,7 @@ package main_test
 import (
 	"testing"
 
-	main "github.com/metal-stack/gardener-extension-csi-driver-synology/charts/gardener-extension-csi-driver-synology/test"
+	main "github.com/metal-stack/gardener-extension-csi-driver-synology/test"
 )
 
 func TestSynologyClient_CreateUser(t *testing.T) {
