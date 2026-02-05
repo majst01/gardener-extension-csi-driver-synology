@@ -22,11 +22,11 @@ import (
 // Actuator acts upon Extension resources
 type Actuator struct {
 	client client.Client
-	config *config.Configuration
+	config *config.ControllerConfiguration
 }
 
 // NewActuator creates a new Actuator
-func NewActuator(client client.Client, config *config.Configuration) extension.Actuator {
+func NewActuator(client client.Client, config *config.ControllerConfiguration) extension.Actuator {
 	return &Actuator{
 		client: client,
 		config: config,

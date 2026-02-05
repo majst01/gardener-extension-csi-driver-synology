@@ -7,6 +7,9 @@ const (
 	// ExtensionName is the name of the service
 	ExtensionName = "gardener-extension-" + ExtensionType
 
+	// GroupName is the name used for gardener group
+	GroupName = "csi-driver-synology.metal.extensions.config.gardener.cloud"
+
 	// CSIDriverName is the name of the CSI driver
 	CSIDriverName = "csi.san.synology.com"
 

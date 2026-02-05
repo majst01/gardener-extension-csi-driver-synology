@@ -12,6 +12,7 @@ import (
 	"github.com/gardener/gardener/extensions/pkg/util"
 	"github.com/gardener/gardener/pkg/apis/authentication/install"
 	"github.com/labstack/gommon/log"
+	csidriversynologycmd "github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/cmd"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/constants"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -27,6 +28,7 @@ import (
 
 type Options struct {
 	generalOptions     *controllercmd.GeneralOptions
+	configOptions      *csidriversynologycmd.ConfigOptions
 	restOptions        *controllercmd.RESTOptions
 	managerOptions     *controllercmd.ManagerOptions
 	controllerOptions  *controllercmd.ControllerOptions
@@ -40,6 +42,7 @@ type Options struct {
 func NewOptions() *Options {
 	options := &Options{
 		generalOptions: &controllercmd.GeneralOptions{},
+		configOptions:  &csidriversynologycmd.ConfigOptions{},
 		restOptions:    &controllercmd.RESTOptions{},
 		managerOptions: &controllercmd.ManagerOptions{
 			LeaderElection:          true,
@@ -64,8 +67,8 @@ func NewOptions() *Options {
 			// This is a default value.
 			MaxConcurrentReconciles: 5,
 		},
-		// controllerSwitches: csidriverlvmcmd.ControllerSwitchOptions(),
-		reconcileOptions: &controllercmd.ReconcilerOptions{},
+		controllerSwitches: csidriversynologycmd.ControllerSwitchOptions(),
+		reconcileOptions:   &controllercmd.ReconcilerOptions{},
 	}
 
 	options.optionAggregator = controllercmd.NewOptionAggregator(
@@ -123,11 +126,11 @@ func (options *Options) run(ctx context.Context) error {
 	}
 	log.Info("added mgr-scheme to installation")
 
-	ctrlConfig := options.csidriverlvmOptions.Completed()
+	ctrlConfig := options.configOptions.Completed()
 	ctrlConfig.Apply(&lifecycle.DefaultAddOptions.Config)
 
 	options.controllerOptions.Completed().Apply(&lifecycle.DefaultAddOptions.ControllerOptions)
-	options.reconcileOptions.Completed().Apply(&lifecycle.DefaultAddOptions.IgnoreOperationAnnotation, &controller.DefaultAddOptions.ExtensionClass)
+	options.reconcileOptions.Completed().Apply(&lifecycle.DefaultAddOptions.IgnoreOperationAnnotation, &lifecycle.DefaultAddOptions.ExtensionClass)
 	options.heartbeatOptions.Completed().Apply(&heartbeatcontroller.DefaultAddOptions)
 
 	if err := options.controllerSwitches.Completed().AddToManager(ctx, mgr); err != nil {

@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	apisconfigv1alpha1 "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -27,4 +28,8 @@ type ControllerConfiguration struct {
 
 	// AdminPassword is the admin password for creating shoot-specific users
 	AdminPassword string `json:"adminPassword"`
+
+	// HealthCheckConfig is the config for the health check controller
+	// +optional
+	HealthCheckConfig *apisconfigv1alpha1.HealthCheckConfig `json:"healthCheckConfig,omitempty"`
 }

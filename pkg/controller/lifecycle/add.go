@@ -23,13 +23,13 @@ type AddOptions struct {
 	// ExtensionClass defines the extension class this extension is responsible for
 	ExtensionClass extensionsv1alpha1.ExtensionClass
 	// Config is the extension configuration
-	Config *config.Configuration
+	Config config.ControllerConfiguration
 }
 
 // AddToManagerWithOptions adds a controller with the given Options to the given manager
 func AddToManagerWithOptions(mgr manager.Manager, opts AddOptions) error {
 	return extension.Add(mgr, extension.AddArgs{
-		Actuator:          NewActuator(mgr.GetClient(), opts.Config),
+		Actuator:          NewActuator(mgr.GetClient(), &opts.Config),
 		ControllerOptions: opts.ControllerOptions,
 		Name:              constants.ExtensionName,
 		FinalizerSuffix:   constants.ExtensionType,

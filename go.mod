@@ -8,6 +8,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/golang/mock v1.6.0
 	github.com/labstack/gommon v0.4.2
+	github.com/metal-stack/gardener-extension-csi-driver-lvm v0.1.9
 	github.com/onsi/ginkgo v1.16.5
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
