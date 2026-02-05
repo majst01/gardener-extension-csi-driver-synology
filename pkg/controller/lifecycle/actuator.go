@@ -60,9 +60,7 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	// Create Synology client
 	synologyClient := synology.NewClient(
-		a.config.SynologyHost,
-		a.config.SynologyPort,
-		a.config.SynologySSL,
+		a.config.SynologyURL,
 		a.config.AdminUsername,
 		a.config.AdminPassword,
 	)
@@ -98,9 +96,7 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	// Create manifest config
 	manifestConfig := &synology.ManifestConfig{
 		Namespace:    v1beta1constants.GardenNamespace,
-		Host:         a.config.SynologyHost,
-		Port:         a.config.SynologyPort,
-		UseSSL:       a.config.SynologySSL,
+		Url:          a.config.SynologyURL,
 		Username:     shootUsername,
 		Password:     shootPassword,
 		ChapEnabled:  a.config.ChapEnabled,
@@ -127,9 +123,7 @@ func (a *Actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 
 	// Create Synology client
 	synologyClient := synology.NewClient(
-		a.config.SynologyHost,
-		a.config.SynologyPort,
-		a.config.SynologySSL,
+		a.config.SynologyURL,
 		a.config.AdminUsername,
 		a.config.AdminPassword,
 	)
@@ -174,6 +168,17 @@ func (a *Actuator) ForceDelete(ctx context.Context, log logr.Logger, ex *extensi
 // deployResources deploys all necessary resources to the shoot cluster
 func (a *Actuator) deployResources(ctx context.Context, log logr.Logger, config *synology.ManifestConfig) error {
 	// Deploy in order: RBAC -> Config -> Deployment
+
+	secret, err := synology.GenerateSecret(config)
+	if err != nil {
+		return fmt.Errorf("failed to generate secret: %w", err)
+	}
+
+	configMap, err := synology.GenerateConfigMap(config)
+	if err != nil {
+		return fmt.Errorf("failed to generate configmap: %w", err)
+	}
+
 	resources := []struct {
 		name   string
 		object client.Object
@@ -184,8 +189,8 @@ func (a *Actuator) deployResources(ctx context.Context, log logr.Logger, config 
 		{"ClusterRole (Node)", synology.GenerateNodeClusterRole()},
 		{"ClusterRoleBinding (Controller)", synology.GenerateClusterRoleBinding(constants.ControllerName, config.Namespace, constants.ControllerName)},
 		{"ClusterRoleBinding (Node)", synology.GenerateClusterRoleBinding(constants.NodeName, config.Namespace, constants.NodeName)},
-		{"Secret", synology.GenerateSecret(config)},
-		{"ConfigMap", synology.GenerateConfigMap(config)},
+		{"Secret", secret},
+		{"ConfigMap", configMap},
 		{"CSIDriver", synology.GenerateCSIDriver()},
 		{"Service", synology.GenerateService(config.Namespace)},
 		{"Deployment (Controller)", synology.GenerateControllerDeployment(config.Namespace)},

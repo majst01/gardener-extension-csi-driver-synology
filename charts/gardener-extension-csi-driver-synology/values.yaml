@@ -29,9 +29,7 @@ config:
     burst: 130
 
 synology:
-  host: ""
-  port: 5000
-  ssl: false
+  url: ""
   adminUsername: ""
   adminPassword: ""
 

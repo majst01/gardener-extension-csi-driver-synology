@@ -17,8 +17,6 @@ data:
       qps: {{ required ".Values.config.clientConnection.qps is required" .Values.config.clientConnection.qps }}
       burst: {{ required ".Values.config.clientConnection.burst is required" .Values.config.clientConnection.burst }}
 {{- end }}
-    host: {{ .Values.synology.host }}
-    port: {{ .Values.config.devicePattern }}
-    ssl: {{ .Values.config.devicePattern }}
-    adminUsername: {{ .Values.config.devicePattern }}
-    adminPassword: {{ .Values.config.devicePattern }}
+    url: {{ .Values.synology.url }}
+    adminUsername: {{ .Values.synology.adminUsername }}
+    adminPassword: {{ .Values.synology.adminPassword }}

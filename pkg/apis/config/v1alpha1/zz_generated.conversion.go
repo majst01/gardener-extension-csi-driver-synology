@@ -39,9 +39,7 @@ func RegisterConversions(s *runtime.Scheme) error {
 }
 
 func autoConvert_v1alpha1_ControllerConfiguration_To_config_ControllerConfiguration(in *ControllerConfiguration, out *config.ControllerConfiguration, s conversion.Scope) error {
-	out.SynologyHost = in.SynologyHost
-	out.SynologyPort = in.SynologyPort
-	out.SynologySSL = in.SynologySSL
+	out.SynologyURL = in.SynologyURL
 	out.ChapEnabled = in.ChapEnabled
 	out.AdminUsername = in.AdminUsername
 	out.AdminPassword = in.AdminPassword
@@ -55,9 +53,7 @@ func Convert_v1alpha1_ControllerConfiguration_To_config_ControllerConfiguration(
 }
 
 func autoConvert_config_ControllerConfiguration_To_v1alpha1_ControllerConfiguration(in *config.ControllerConfiguration, out *ControllerConfiguration, s conversion.Scope) error {
-	out.SynologyHost = in.SynologyHost
-	out.SynologyPort = in.SynologyPort
-	out.SynologySSL = in.SynologySSL
+	out.SynologyURL = in.SynologyURL
 	out.ChapEnabled = in.ChapEnabled
 	out.AdminUsername = in.AdminUsername
 	out.AdminPassword = in.AdminPassword

@@ -14,9 +14,7 @@ import (
 
 // Client represents a Synology DSM API client
 type Client struct {
-	host       string
-	port       int
-	useSSL     bool
+	url        string
 	username   string
 	password   string
 	sessionID  string
@@ -24,11 +22,9 @@ type Client struct {
 }
 
 // NewClient creates a new Synology API client
-func NewClient(host string, port int, useSSL bool, username, password string) *Client {
+func NewClient(url, username, password string) *Client {
 	return &Client{
-		host:     host,
-		port:     port,
-		useSSL:   useSSL,
+		url:      url,
 		username: username,
 		password: password,
 		httpClient: &http.Client{
@@ -42,11 +38,7 @@ func NewClient(host string, port int, useSSL bool, username, password string) *C
 
 // baseURL returns the base URL for API calls
 func (c *Client) baseURL() string {
-	protocol := "http"
-	if c.useSSL {
-		protocol = "https"
-	}
-	return fmt.Sprintf("%s://%s:%d/webapi", protocol, c.host, c.port)
+	return fmt.Sprintf("%s/webapi", c.url)
 }
 
 // Login authenticates with the Synology NAS

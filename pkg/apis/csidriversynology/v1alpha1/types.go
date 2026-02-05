@@ -7,21 +7,21 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Configuration contains configuration for the Synology CSI driver extension
-type ControllerConfiguration struct {
+// ShootConfiguration defines the configuration for the CSI driver in the shoot cluster
+type ShootConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// SynologyURL is the URL of the Synology NAS
-	SynologyURL string `json:"synologyURL,omitempty"`
+	SynologyURL string `json:"synologyUrl,omitempty"`
 
 	// ChapEnabled indicates whether CHAP authentication is enabled
 	ChapEnabled bool `json:"chapEnabled,omitempty"`
 
-	// AdminUsername is the admin username for creating shoot-specific users
-	AdminUsername string `json:"adminUsername,omitempty"`
+	// Username is the username for creating shoot-specific volumes
+	Username string `json:"username,omitempty"`
 
-	// AdminPassword is the admin password for creating shoot-specific users
-	AdminPassword string `json:"adminPassword,omitempty"`
+	// Password is the password for creating shoot-specific volumes
+	Password string `json:"password,omitempty"`
 
 	// HealthCheckConfig is the config for the health check controller
 	// +optional

@@ -2,6 +2,7 @@ package synology
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/constants"
 	corev1 "k8s.io/api/core/v1"
@@ -15,9 +16,7 @@ import (
 // ManifestConfig contains configuration for generating manifests
 type ManifestConfig struct {
 	Namespace    string
-	Host         string
-	Port         int
-	UseSSL       bool
+	Url          string
 	Username     string
 	Password     string
 	ChapEnabled  bool
@@ -197,16 +196,16 @@ func GenerateClusterRoleBinding(name, namespace, serviceAccount string) *rbacv1.
 }
 
 // GenerateSecret generates the secret containing Synology credentials
-func GenerateSecret(config *ManifestConfig) *corev1.Secret {
-	protocol := "http"
-	if config.UseSSL {
-		protocol = "https"
+func GenerateSecret(config *ManifestConfig) (*corev1.Secret, error) {
+	u, err := url.Parse(config.Url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Synology URL: %w", err)
 	}
 
 	data := map[string][]byte{
-		"host":     []byte(config.Host),
-		"port":     []byte(fmt.Sprintf("%d", config.Port)),
-		"protocol": []byte(protocol),
+		"host":     []byte(u.Hostname()),
+		"port":     []byte(u.Port()),
+		"protocol": []byte(u.Scheme),
 		"username": []byte(config.Username),
 		"password": []byte(config.Password),
 	}
@@ -227,22 +226,22 @@ func GenerateSecret(config *ManifestConfig) *corev1.Secret {
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: data,
-	}
+	}, nil
 }
 
 // GenerateConfigMap generates the ConfigMap
-func GenerateConfigMap(config *ManifestConfig) *corev1.ConfigMap {
-	protocol := "http"
-	if config.UseSSL {
-		protocol = "https"
+func GenerateConfigMap(config *ManifestConfig) (*corev1.ConfigMap, error) {
+	u, err := url.Parse(config.Url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Synology URL: %w", err)
 	}
 
 	clientInfoYAML := fmt.Sprintf(`---
 clients:
   - host: %s://%s
-    port: %d
+    port: %s
     https: %t
-`, protocol, config.Host, config.Port, config.UseSSL)
+`, u.Scheme, u.Hostname(), u.Port(), u.Scheme == "https")
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -255,7 +254,7 @@ clients:
 		Data: map[string]string{
 			"client-info.yaml": clientInfoYAML,
 		},
-	}
+	}, nil
 }
 
 // GenerateCSIDriver generates the CSIDriver resource
