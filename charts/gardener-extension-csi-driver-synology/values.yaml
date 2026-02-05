@@ -1,5 +1,5 @@
 image:
-  repository: synology/synology-csi
+  repository: ghcr.io/metal-stack/gardener-extension-csi-driver-synology
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -12,6 +12,14 @@ resources:
   requests:
     cpu: 50m
     memory: 128Mi
+
+controllers:
+  concurrentSyncs: 5
+  healthcheck:
+    concurrentSyncs: 5
+  heartbeat:
+    renewIntervalSeconds: 30
+  ignoreOperationAnnotation: false
 
 config:
   clientConnection:
@@ -36,3 +44,6 @@ serviceAccount:
 
 rbac:
   create: true
+
+gardener:
+  version: ""
