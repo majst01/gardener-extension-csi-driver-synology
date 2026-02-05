@@ -9,6 +9,15 @@ rules:
 - apiGroups:
   - extensions.gardener.cloud
   resources:
+  - clusters
+  - workers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions.gardener.cloud
+  resources:
   - extensions
   - extensions/status
   verbs:
@@ -17,6 +26,18 @@ rules:
   - watch
   - patch
   - update
+- apiGroups:
+  - resources.gardener.cloud
+  resources:
+  - managedresources
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - ""
   resources:
@@ -86,16 +107,17 @@ rules:
   - leases
   verbs:
   - create
+  - update
+  - list
+  - watch
+  - patch
 - apiGroups:
   - coordination.k8s.io
   resources:
   - leases
   resourceNames:
-    - {{ include "name" . }}-leader-election
+  - gardener-extension-csi-driver-synology-leader-election
   verbs:
   - update
   - get
-  - update
-  - list
-  - watch
 {{- end }}

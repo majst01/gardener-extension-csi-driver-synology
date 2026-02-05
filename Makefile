@@ -70,8 +70,12 @@ check-generate:
 	@$(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/check-generate.sh $(REPO_ROOT)
 
 .PHONY: generate
-generate: $(VGOPATH) $(HELM) $(YQ)
-	@REPO_ROOT=$(REPO_ROOT) VGOPATH=$(VGOPATH) GARDENER_HACK_DIR=$(GARDENER_HACK_DIR) bash $(GARDENER_HACK_DIR)/generate-sequential.sh ./charts/... ./cmd/... ./pkg/...
+generate: $(VGOPATH) $(HELM) $(YQ) generate-charts
+	@REPO_ROOT=$(REPO_ROOT) VGOPATH=$(VGOPATH) GARDENER_HACK_DIR=$(GARDENER_HACK_DIR) bash $(GARDENER_HACK_DIR)/generate-sequential.sh ./cmd/... ./pkg/...
+
+.PHONY: generate-charts
+generate-charts: $(VGOPATH) $(HELM) $(YQ)
+	@REPO_ROOT=$(REPO_ROOT) VGOPATH=$(VGOPATH) GARDENER_HACK_DIR=$(GARDENER_HACK_DIR) bash $(GARDENER_HACK_DIR)/generate-sequential.sh ./charts/...
 
 .PHONY: generate-in-docker
 generate-in-docker: tidy install $(HELM) $(YQ)

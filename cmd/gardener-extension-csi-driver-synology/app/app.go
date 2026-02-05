@@ -33,14 +33,5 @@ func NewControllerCommand(ctx context.Context) *cobra.Command {
 
 	options.optionAggregator.AddFlags(cmd.Flags())
 
-	// aggOption.AddFlags(cmd.Flags())
-
-	// cmd.Flags().StringVar(&cfg.SynologyHost, "synology-host", "", "Synology NAS host")
-	// cmd.Flags().IntVar(&cfg.SynologyPort, "synology-port", 5000, "Synology NAS port")
-	// cmd.Flags().BoolVar(&cfg.SynologySSL, "synology-ssl", false, "Use SSL for Synology connection")
-	// cmd.Flags().BoolVar(&cfg.ChapEnabled, "chap-enabled", true, "Enable CHAP authentication")
-	// cmd.Flags().StringVar(&cfg.AdminUsername, "admin-username", "", "Synology admin username")
-	// cmd.Flags().StringVar(&cfg.AdminPassword, "admin-password", "", "Synology admin password")
-
 	return cmd
 }

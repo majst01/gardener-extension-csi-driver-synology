@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/go-logr/logr"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
+	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config/v1alpha1"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/constants"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/synology"
 	appsv1 "k8s.io/api/apps/v1"
@@ -16,30 +18,45 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Actuator acts upon Extension resources
 type Actuator struct {
-	client client.Client
-	config *config.ControllerConfiguration
+	client  client.Client
+	decoder runtime.Decoder
+	config  *config.ControllerConfiguration
 }
 
 // NewActuator creates a new Actuator
 func NewActuator(client client.Client, config *config.ControllerConfiguration) extension.Actuator {
 	return &Actuator{
-		client: client,
-		config: config,
+		client:  client,
+		decoder: serializer.NewCodecFactory(client.Scheme(), serializer.EnableStrict).UniversalDecoder(),
+		config:  config,
 	}
 }
 
 // Reconcile the Extension resource
 func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
+	controllerConfiguration := &v1alpha1.ControllerConfiguration{}
+	if ex.Spec.ProviderConfig != nil {
+		_, _, err := a.decoder.Decode(ex.Spec.ProviderConfig.Raw, nil, controllerConfiguration)
+		if err != nil {
+			return fmt.Errorf("failed to decode provider config: %w", err)
+		}
+	}
+
 	namespace := ex.GetNamespace()
 	shootName := namespace
 	shootNamespace := namespace
 
 	log.Info("Reconciling Synology CSI extension", "namespace", namespace)
+
+	spew.Dump(a.config)
+	spew.Dump(controllerConfiguration)
 
 	// Create Synology client
 	synologyClient := synology.NewClient(
