@@ -23,6 +23,7 @@ import (
 	heartbeatcontroller "github.com/gardener/gardener/extensions/pkg/controller/heartbeat"
 	ghealth "github.com/gardener/gardener/pkg/healthz"
 
+	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/controller/healthcheck"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/controller/lifecycle"
 )
 
@@ -73,7 +74,7 @@ func NewOptions() *Options {
 
 	options.optionAggregator = controllercmd.NewOptionAggregator(
 		options.generalOptions,
-		// options.csidriverlvmOptions,
+		options.configOptions,
 		options.restOptions,
 		options.managerOptions,
 		options.controllerOptions,
@@ -126,9 +127,7 @@ func (options *Options) run(ctx context.Context) error {
 	}
 	log.Info("added mgr-scheme to installation")
 
-	ctrlConfig := options.configOptions.Completed()
-	ctrlConfig.Apply(&lifecycle.DefaultAddOptions.Config)
-
+	options.configOptions.Completed().Apply(&lifecycle.DefaultAddOptions.Config)
 	options.controllerOptions.Completed().Apply(&lifecycle.DefaultAddOptions.ControllerOptions)
 	options.reconcileOptions.Completed().Apply(&lifecycle.DefaultAddOptions.IgnoreOperationAnnotation, &lifecycle.DefaultAddOptions.ExtensionClass)
 	options.heartbeatOptions.Completed().Apply(&heartbeatcontroller.DefaultAddOptions)
@@ -147,6 +146,10 @@ func (options *Options) run(ctx context.Context) error {
 		return fmt.Errorf("could not add health check to manager: %w", err)
 	}
 	log.Info("added healthzcheck")
+
+	if err := healthcheck.AddToManager(mgr); err != nil {
+		return fmt.Errorf("could not add healthcheck controller: %w", err)
+	}
 
 	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("error running manager: %w", err)
