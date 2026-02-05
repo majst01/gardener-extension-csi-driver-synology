@@ -1,0 +1,3 @@
+---
+apiVersion: csi-driver-synology.metal.extensions.config.gardener.cloud/v1alpha1
+kind: ControllerConfiguration

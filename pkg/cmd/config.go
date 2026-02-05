@@ -5,8 +5,8 @@ import (
 	"os"
 
 	apisconfigv1alpha1 "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
-	"github.com/metal-stack/gardener-extension-csi-driver-lvm/pkg/apis/config/v1alpha1"
 	configapi "github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
+	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config/v1alpha1"
 
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"

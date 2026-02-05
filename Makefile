@@ -6,7 +6,7 @@ IMAGE_PREFIX                := $(REGISTRY)
 REPO_ROOT                   := $(shell dirname "$(realpath $(lastword $(MAKEFILE_LIST)))")
 HACK_DIR                    := $(REPO_ROOT)/hack
 HOSTNAME                    := $(shell hostname)
-LD_FLAGS                    := "-w -X github.com/metal-stack/gardener-extension-csi-driver-lvm/pkg/version.Version=$(IMAGE_TAG)"
+LD_FLAGS                    := "-w -X github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/version.Version=$(IMAGE_TAG)"
 VERIFY                      := true
 LEADER_ELECTION             := false
 IGNORE_OPERATION_ANNOTATION := false
@@ -37,7 +37,7 @@ tidy:
 
 .PHONY: build
 build:
-	go build -ldflags $(LD_FLAGS) -tags netgo -o bin/gardener-extension-csi-driver-lvm ./cmd/gardener-extension-csi-driver-lvm
+	go build -ldflags $(LD_FLAGS) -tags netgo -o bin/gardener-extension-csi-driver-synology./cmd/gardener-extension-csi-driver-synology
 
 .PHONY: install
 install: tidy $(HELM)
@@ -48,12 +48,12 @@ install: tidy $(HELM)
 docker-image:
 	@docker build --no-cache \
 		--build-arg VERIFY=$(VERIFY) \
-		--tag $(IMAGE_PREFIX)/gardener-extension-csi-driver-lvm:$(IMAGE_TAG) \
+		--tag $(IMAGE_PREFIX)/gardener-extension-csi-driver-synology:$(IMAGE_TAG) \
 		--file Dockerfile --memory 6g .
 
 .PHONY: docker-push
 docker-push:
-	@docker push $(IMAGE_PREFIX)/gardener-extension-csi-driver-lvm:$(IMAGE_TAG)
+	@docker push $(IMAGE_PREFIX)/gardener-extension-csi-driver-synology:$(IMAGE_TAG)
 
 
 .PHONY: revendor

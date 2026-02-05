@@ -13,6 +13,13 @@ resources:
     cpu: 50m
     memory: 128Mi
 
+config:
+  clientConnection:
+    acceptContentTypes: application/json
+    contentType: application/json
+    qps: 100
+    burst: 130
+
 synology:
   host: ""
   port: 5000
