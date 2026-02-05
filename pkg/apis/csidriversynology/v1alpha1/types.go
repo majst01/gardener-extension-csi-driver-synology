@@ -12,7 +12,7 @@ type ShootConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// SynologyURL is the URL of the Synology NAS
-	SynologyURL string `json:"synologyUrl,omitempty"`
+	SynologyURL string `json:"synologyURL,omitempty"`
 
 	// ChapEnabled indicates whether CHAP authentication is enabled
 	ChapEnabled bool `json:"chapEnabled,omitempty"`

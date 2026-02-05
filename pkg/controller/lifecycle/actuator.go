@@ -10,7 +10,7 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/go-logr/logr"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
-	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config/v1alpha1"
+	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/csidriversynology/v1alpha1"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/constants"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/synology"
 	appsv1 "k8s.io/api/apps/v1"
@@ -41,9 +41,9 @@ func NewActuator(client client.Client, config *config.ControllerConfiguration) e
 
 // Reconcile the Extension resource
 func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
-	controllerConfiguration := &v1alpha1.ControllerConfiguration{}
+	shootConfig := &v1alpha1.ShootConfiguration{}
 	if ex.Spec.ProviderConfig != nil {
-		_, _, err := a.decoder.Decode(ex.Spec.ProviderConfig.Raw, nil, controllerConfiguration)
+		_, _, err := a.decoder.Decode(ex.Spec.ProviderConfig.Raw, nil, shootConfig)
 		if err != nil {
 			return fmt.Errorf("failed to decode provider config: %w", err)
 		}
@@ -56,7 +56,7 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	log.Info("Reconciling Synology CSI extension", "namespace", namespace)
 
 	spew.Dump(a.config)
-	spew.Dump(controllerConfiguration)
+	spew.Dump(shootConfig)
 
 	// Create Synology client
 	synologyClient := synology.NewClient(
