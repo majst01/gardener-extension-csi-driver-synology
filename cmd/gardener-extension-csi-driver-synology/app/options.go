@@ -28,23 +28,23 @@ import (
 )
 
 type Options struct {
-	generalOptions     *controllercmd.GeneralOptions
-	configOptions      *csidriversynologycmd.ConfigOptions
-	restOptions        *controllercmd.RESTOptions
-	managerOptions     *controllercmd.ManagerOptions
-	controllerOptions  *controllercmd.ControllerOptions
-	heartbeatOptions   *heartbeatcmd.Options
-	healthOptions      *controllercmd.ControllerOptions
-	controllerSwitches *controllercmd.SwitchOptions
-	reconcileOptions   *controllercmd.ReconcilerOptions
-	optionAggregator   controllercmd.OptionAggregator
+	generalOptions           *controllercmd.GeneralOptions
+	csidriversynologyOptions *csidriversynologycmd.ConfigOptions
+	restOptions              *controllercmd.RESTOptions
+	managerOptions           *controllercmd.ManagerOptions
+	controllerOptions        *controllercmd.ControllerOptions
+	heartbeatOptions         *heartbeatcmd.Options
+	healthOptions            *controllercmd.ControllerOptions
+	controllerSwitches       *controllercmd.SwitchOptions
+	reconcileOptions         *controllercmd.ReconcilerOptions
+	optionAggregator         controllercmd.OptionAggregator
 }
 
 func NewOptions() *Options {
 	options := &Options{
-		generalOptions: &controllercmd.GeneralOptions{},
-		configOptions:  &csidriversynologycmd.ConfigOptions{},
-		restOptions:    &controllercmd.RESTOptions{},
+		generalOptions:           &controllercmd.GeneralOptions{},
+		csidriversynologyOptions: &csidriversynologycmd.ConfigOptions{},
+		restOptions:              &controllercmd.RESTOptions{},
 		managerOptions: &controllercmd.ManagerOptions{
 			LeaderElection:          true,
 			LeaderElectionID:        controllercmd.LeaderElectionNameID(constants.ExtensionName),
@@ -74,7 +74,7 @@ func NewOptions() *Options {
 
 	options.optionAggregator = controllercmd.NewOptionAggregator(
 		options.generalOptions,
-		options.configOptions,
+		options.csidriversynologyOptions,
 		options.restOptions,
 		options.managerOptions,
 		options.controllerOptions,
@@ -127,7 +127,9 @@ func (options *Options) run(ctx context.Context) error {
 	}
 	log.Info("added mgr-scheme to installation")
 
-	options.configOptions.Completed().Apply(&lifecycle.DefaultAddOptions.Config)
+	ctrlConfig := options.csidriversynologyOptions.Completed()
+	ctrlConfig.Apply(&lifecycle.DefaultAddOptions.Config)
+
 	options.controllerOptions.Completed().Apply(&lifecycle.DefaultAddOptions.ControllerOptions)
 	options.reconcileOptions.Completed().Apply(&lifecycle.DefaultAddOptions.IgnoreOperationAnnotation, &lifecycle.DefaultAddOptions.ExtensionClass)
 	options.heartbeatOptions.Completed().Apply(&heartbeatcontroller.DefaultAddOptions)

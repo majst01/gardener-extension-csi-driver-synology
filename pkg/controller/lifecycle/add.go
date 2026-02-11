@@ -3,7 +3,6 @@ package lifecycle
 import (
 	"context"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
@@ -46,6 +45,5 @@ func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts AddO
 // AddToManager adds a controller with the default Options
 func AddToManager(ctx context.Context, mgr manager.Manager) error {
 	mgr.GetLogger().Info("Adding to manger...")
-	spew.Dump(DefaultAddOptions)
 	return AddToManagerWithOptions(ctx, mgr, DefaultAddOptions)
 }

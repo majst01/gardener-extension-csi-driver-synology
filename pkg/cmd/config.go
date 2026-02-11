@@ -2,13 +2,12 @@ package cmd
 
 import (
 	"errors"
-	"log"
 	"os"
 
-	"github.com/davecgh/go-spew/spew"
 	apisconfigv1alpha1 "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
 	configapi "github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config/v1alpha1"
+	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config/validation"
 
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -51,21 +50,14 @@ func (o *ConfigOptions) Complete() error {
 	}
 
 	config := configapi.ControllerConfiguration{}
-	obj, gvk, err := decoder.Decode(data, nil, &config)
+	_, _, err = decoder.Decode(data, nil, &config)
 	if err != nil {
 		return err
 	}
 
-	spew.Dump(obj)
-	spew.Dump(gvk)
-
-	log.Default().Println(o.ConfigLocation)
-	log.Default().Println("ConfigOptions decoded...")
-	spew.Dump(config)
-
-	// if errs := validation.ValidateConfiguration(&config); len(errs) > 0 {
-	// 	return errs.ToAggregate()
-	// }
+	if errs := validation.ValidateConfiguration(&config); len(errs) > 0 {
+		return errs.ToAggregate()
+	}
 
 	o.config = &Config{
 		config: config,

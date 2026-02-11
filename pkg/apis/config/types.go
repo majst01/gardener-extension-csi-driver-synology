@@ -12,16 +12,16 @@ type ControllerConfiguration struct {
 	metav1.TypeMeta
 
 	// SynologyURL is the URL of the Synology NAS
-	SynologyURL *string
+	SynologyURL string
 
 	// ChapEnabled indicates whether CHAP authentication is enabled
-	ChapEnabled *bool
+	ChapEnabled bool
 
 	// AdminUsername is the admin username for creating shoot-specific users
-	AdminUsername *string
+	AdminUsername string
 
 	// AdminPassword is the admin password for creating shoot-specific users
-	AdminPassword *string
+	AdminPassword string
 
 	// HealthCheckConfig is the config for the health check controller
 	HealthCheckConfig *apisconfigv1alpha1.HealthCheckConfig

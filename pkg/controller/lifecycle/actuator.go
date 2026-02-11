@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -32,7 +31,6 @@ type Actuator struct {
 
 // NewActuator creates a new Actuator
 func NewActuator(client client.Client, config config.ControllerConfiguration) extension.Actuator {
-	spew.Dump(config)
 	return &Actuator{
 		client:  client,
 		decoder: serializer.NewCodecFactory(client.Scheme(), serializer.EnableStrict).UniversalDecoder(),
@@ -56,14 +54,11 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	log.Info("Reconciling Synology CSI extension", "namespace", namespace)
 
-	spew.Dump(a.config)
-	spew.Dump(shootConfig)
-
 	// Create Synology client
 	synologyClient := synology.NewClient(
-		*a.config.SynologyURL,
-		*a.config.AdminUsername,
-		*a.config.AdminPassword,
+		a.config.SynologyURL,
+		a.config.AdminUsername,
+		a.config.AdminPassword,
 	)
 
 	// Login to Synology
@@ -86,7 +81,7 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	// Generate CHAP credentials if enabled
 	var chapUsername, chapPassword string
-	if *a.config.ChapEnabled {
+	if a.config.ChapEnabled {
 		chapUsername = shootUsername + "-chap"
 		chapPassword, err = synology.GenerateRandomPassword(16)
 		if err != nil {
@@ -97,10 +92,10 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	// Create manifest config
 	manifestConfig := &synology.ManifestConfig{
 		Namespace:    v1beta1constants.GardenNamespace,
-		Url:          *a.config.SynologyURL,
+		Url:          a.config.SynologyURL,
 		Username:     shootUsername,
 		Password:     shootPassword,
-		ChapEnabled:  *a.config.ChapEnabled,
+		ChapEnabled:  a.config.ChapEnabled,
 		ChapUsername: chapUsername,
 		ChapPassword: chapPassword,
 	}
@@ -124,9 +119,9 @@ func (a *Actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 
 	// Create Synology client
 	synologyClient := synology.NewClient(
-		*a.config.SynologyURL,
-		*a.config.AdminUsername,
-		*a.config.AdminPassword,
+		a.config.SynologyURL,
+		a.config.AdminUsername,
+		a.config.AdminPassword,
 	)
 
 	// Login to Synology

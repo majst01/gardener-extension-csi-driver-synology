@@ -18,26 +18,6 @@ import (
 func (in *ControllerConfiguration) DeepCopyInto(out *ControllerConfiguration) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	if in.SynologyURL != nil {
-		in, out := &in.SynologyURL, &out.SynologyURL
-		*out = new(string)
-		**out = **in
-	}
-	if in.ChapEnabled != nil {
-		in, out := &in.ChapEnabled, &out.ChapEnabled
-		*out = new(bool)
-		**out = **in
-	}
-	if in.AdminUsername != nil {
-		in, out := &in.AdminUsername, &out.AdminUsername
-		*out = new(string)
-		**out = **in
-	}
-	if in.AdminPassword != nil {
-		in, out := &in.AdminPassword, &out.AdminPassword
-		*out = new(string)
-		**out = **in
-	}
 	if in.HealthCheckConfig != nil {
 		in, out := &in.HealthCheckConfig, &out.HealthCheckConfig
 		*out = new(v1alpha1.HealthCheckConfig)
