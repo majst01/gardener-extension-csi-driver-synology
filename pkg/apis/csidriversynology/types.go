@@ -7,8 +7,8 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ShootConfiguration defines the configuration for the CSI driver in the shoot cluster
-type ShootConfiguration struct {
+// CsiDriverSynologyConfig defines the configuration for the CSI driver in the shoot cluster
+type CsiDriverSynologyConfig struct {
 	metav1.TypeMeta
 
 	// SynologyURL is the URL of the Synology NAS

@@ -39,10 +39,10 @@ func RegisterConversions(s *runtime.Scheme) error {
 }
 
 func autoConvert_v1alpha1_ControllerConfiguration_To_config_ControllerConfiguration(in *ControllerConfiguration, out *config.ControllerConfiguration, s conversion.Scope) error {
-	out.SynologyURL = in.SynologyURL
-	out.ChapEnabled = in.ChapEnabled
-	out.AdminUsername = in.AdminUsername
-	out.AdminPassword = in.AdminPassword
+	out.SynologyURL = (*string)(unsafe.Pointer(in.SynologyURL))
+	out.ChapEnabled = (*bool)(unsafe.Pointer(in.ChapEnabled))
+	out.AdminUsername = (*string)(unsafe.Pointer(in.AdminUsername))
+	out.AdminPassword = (*string)(unsafe.Pointer(in.AdminPassword))
 	out.HealthCheckConfig = (*configv1alpha1.HealthCheckConfig)(unsafe.Pointer(in.HealthCheckConfig))
 	return nil
 }
@@ -53,10 +53,10 @@ func Convert_v1alpha1_ControllerConfiguration_To_config_ControllerConfiguration(
 }
 
 func autoConvert_config_ControllerConfiguration_To_v1alpha1_ControllerConfiguration(in *config.ControllerConfiguration, out *ControllerConfiguration, s conversion.Scope) error {
-	out.SynologyURL = in.SynologyURL
-	out.ChapEnabled = in.ChapEnabled
-	out.AdminUsername = in.AdminUsername
-	out.AdminPassword = in.AdminPassword
+	out.SynologyURL = (*string)(unsafe.Pointer(in.SynologyURL))
+	out.ChapEnabled = (*bool)(unsafe.Pointer(in.ChapEnabled))
+	out.AdminUsername = (*string)(unsafe.Pointer(in.AdminUsername))
+	out.AdminPassword = (*string)(unsafe.Pointer(in.AdminPassword))
 	out.HealthCheckConfig = (*configv1alpha1.HealthCheckConfig)(unsafe.Pointer(in.HealthCheckConfig))
 	return nil
 }

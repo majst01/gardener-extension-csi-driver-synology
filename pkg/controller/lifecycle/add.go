@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"context"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
@@ -27,19 +28,24 @@ type AddOptions struct {
 }
 
 // AddToManagerWithOptions adds a controller with the given Options to the given manager
-func AddToManagerWithOptions(mgr manager.Manager, opts AddOptions) error {
+func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts AddOptions) error {
 	return extension.Add(mgr, extension.AddArgs{
-		Actuator:          NewActuator(mgr.GetClient(), &opts.Config),
+		Actuator:          NewActuator(mgr.GetClient(), opts.Config),
 		ControllerOptions: opts.ControllerOptions,
-		Name:              constants.ExtensionName,
+		Name:              constants.ExtensionType,
 		FinalizerSuffix:   constants.ExtensionType,
 		Resync:            0,
-		Predicates:        extension.DefaultPredicates(context.Background(), mgr, opts.IgnoreOperationAnnotation),
+		Predicates:        extension.DefaultPredicates(ctx, mgr, opts.IgnoreOperationAnnotation),
 		Type:              constants.ExtensionType,
+		ExtensionClasses: []extensionsv1alpha1.ExtensionClass{
+			opts.ExtensionClass,
+		},
 	})
 }
 
 // AddToManager adds a controller with the default Options
 func AddToManager(ctx context.Context, mgr manager.Manager) error {
-	return AddToManagerWithOptions(mgr, DefaultAddOptions)
+	mgr.GetLogger().Info("Adding to manger...")
+	spew.Dump(DefaultAddOptions)
+	return AddToManagerWithOptions(ctx, mgr, DefaultAddOptions)
 }
