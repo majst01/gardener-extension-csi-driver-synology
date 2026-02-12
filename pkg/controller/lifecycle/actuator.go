@@ -97,7 +97,7 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	// Create manifest config
 	manifestConfig := &synology.ManifestConfig{
-		Namespace:    v1beta1constants.GardenNamespace,
+		Namespace:    "kube-system",
 		Url:          a.config.SynologyURL,
 		Username:     shootUsername,
 		Password:     shootPassword,
@@ -106,7 +106,7 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		ChapPassword: chapPassword,
 	}
 
-	objects, err := a.deployResources(ctx, log, manifestConfig)
+	objects, err := a.generateManifests(manifestConfig)
 	if err != nil {
 		return fmt.Errorf("unable to generate resource manifests for shoot: %w", err)
 	}
@@ -181,8 +181,8 @@ func (a *Actuator) ForceDelete(ctx context.Context, log logr.Logger, ex *extensi
 	return a.Delete(ctx, log, ex)
 }
 
-// deployResources deploys all necessary resources to the shoot cluster
-func (a *Actuator) deployResources(ctx context.Context, log logr.Logger, config *synology.ManifestConfig) ([]client.Object, error) {
+// generateManifests deploys all necessary resources to the shoot cluster
+func (a *Actuator) generateManifests(config *synology.ManifestConfig) ([]client.Object, error) {
 	secret, err := synology.GenerateSecret(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate secret: %w", err)
