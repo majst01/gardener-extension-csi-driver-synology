@@ -2,6 +2,11 @@
 
 This extension integrates the [Synology CSI Driver](https://github.com/SynologyOpenSource/synology-csi) with Gardener.
 
+## Todos
+- idempotent reconcile (user creation)
+- mounting volume not working: "iscsiadm: Could not perform SendTargets discovery: could not connect to iscsid"
+- deletion flow
+
 ## Features
 
 - Automatic deployment of Synology CSI driver to shoot clusters
@@ -60,9 +65,12 @@ providerConfig:
       ssl: true
       adminUsername: "admin"
       adminPassword: "your-admin-password"
-    chap:
-      enabled: true
+    # IMPORTANT: Chap is yet not implemented in csi-driver
+    # chap:
+    #   enabled: true
 ```
+
+After shoot got deployed a user will be created for the specific shoot. At the moment we need to manually add the user to the administrator and application groups.
 
 ## Usage in Shoot Cluster
 
