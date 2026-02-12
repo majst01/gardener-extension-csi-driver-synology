@@ -224,9 +224,13 @@ func GenerateControllerDeployment(namespace string) *appsv1.Deployment {
 						{
 							Name: "client-info",
 							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: constants.ConfigMapName,
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: constants.SecretName,
+									Items: []corev1.KeyToPath{
+										{
+											Key:  "client-info.yaml",
+											Path: "client-info.yaml",
+										},
 									},
 								},
 							},

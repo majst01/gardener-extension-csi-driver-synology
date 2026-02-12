@@ -27,6 +27,7 @@ docker run -it --rm --name dsm \
   --network kind \
   -e "DISK_SIZE=256G" \
   -p 5000:5000 \
+  -p 3260:3260 \
   --device=/dev/kvm --device=/dev/net/tun --cap-add NET_ADMIN \
   -v "${PWD:-.}/dsm:/storage" \
   --stop-timeout 120 \

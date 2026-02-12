@@ -3,6 +3,8 @@ package lifecycle
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strconv"
 
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
@@ -95,6 +97,16 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		}
 	}
 
+	u, err := url.Parse(a.config.SynologyURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse synology-url: %w", err)
+	}
+
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		return fmt.Errorf("failed to parse synology-url port: %w", err)
+	}
+
 	// Create manifest config
 	manifestConfig := &synology.ManifestConfig{
 		Namespace:    "kube-system",
@@ -104,6 +116,22 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		ChapEnabled:  a.config.ChapEnabled,
 		ChapUsername: chapUsername,
 		ChapPassword: chapPassword,
+		Clients: []synology.ClientConfig{
+			{
+				Host:     u.Hostname(),
+				Port:     port,
+				HTTPS:    u.Scheme == "https",
+				Username: shootUsername,
+				Password: shootPassword,
+			},
+			{
+				Host:     u.Hostname(),
+				Port:     5001,
+				HTTPS:    u.Scheme == "https",
+				Username: shootUsername,
+				Password: shootPassword,
+			},
+		},
 	}
 
 	objects, err := a.generateManifests(manifestConfig)
@@ -188,11 +216,6 @@ func (a *Actuator) generateManifests(config *synology.ManifestConfig) ([]client.
 		return nil, fmt.Errorf("failed to generate secret: %w", err)
 	}
 
-	configMap, err := synology.GenerateConfigMap(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate configmap: %w", err)
-	}
-
 	objects := []client.Object{
 		synology.GenerateServiceAccount(config.Namespace, constants.ControllerName),
 		synology.GenerateServiceAccount(config.Namespace, constants.NodeName),
@@ -201,12 +224,12 @@ func (a *Actuator) generateManifests(config *synology.ManifestConfig) ([]client.
 		synology.GenerateClusterRoleBinding(constants.ControllerName, config.Namespace, constants.ControllerName),
 		synology.GenerateClusterRoleBinding(constants.NodeName, config.Namespace, constants.NodeName),
 		secret,
-		configMap,
 		synology.GenerateCSIDriver(),
 		synology.GenerateService(config.Namespace),
 		synology.GenerateControllerDeployment(config.Namespace),
 		synology.GenerateNodeDaemonSet(config.Namespace),
 		synology.GenerateStorageClass(config.Namespace),
+		synology.GenerateAllowAllEgressNetworkPolicy(config.Namespace),
 	}
 
 	return objects, nil
@@ -228,7 +251,7 @@ func (a *Actuator) deleteResources(ctx context.Context, log logr.Logger, namespa
 	}
 
 	for _, obj := range resources {
-		if err := a.deleteResourcesByType(ctx, log, obj, namespace); err != nil {
+		if err := a.deleteResourcesByType(ctx, obj, namespace); err != nil {
 			log.Error(err, "Failed to delete resource", "type", fmt.Sprintf("%T", obj))
 		}
 	}
@@ -265,7 +288,7 @@ func (a *Actuator) createOrUpdate(ctx context.Context, log logr.Logger, obj clie
 }
 
 // deleteResourcesByType deletes all resources of a given type
-func (a *Actuator) deleteResourcesByType(ctx context.Context, log logr.Logger, obj client.Object, namespace string) error {
+func (a *Actuator) deleteResourcesByType(ctx context.Context, obj client.Object, namespace string) error {
 	listOpts := []client.DeleteAllOfOption{
 		client.InNamespace(namespace),
 		client.MatchingLabels{"app.kubernetes.io/name": "synology-csi"},
