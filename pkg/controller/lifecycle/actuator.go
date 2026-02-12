@@ -7,6 +7,8 @@ import (
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
+	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/csidriversynology/v1alpha1"
@@ -55,11 +57,15 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	log.Info("Reconciling Synology CSI extension", "namespace", namespace)
 
 	// Create Synology client
-	synologyClient := synology.NewClient(
+	synologyClient, err := synology.NewClient(
 		a.config.SynologyURL,
 		a.config.AdminUsername,
 		a.config.AdminPassword,
 	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create Synology client: %w", err)
+	}
 
 	// Login to Synology
 	if err := synologyClient.Login(); err != nil {
@@ -100,9 +106,19 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		ChapPassword: chapPassword,
 	}
 
-	// Deploy resources to shoot cluster
-	if err := a.deployResources(ctx, log, manifestConfig); err != nil {
-		return fmt.Errorf("failed to deploy resources: %w", err)
+	objects, err := a.deployResources(ctx, log, manifestConfig)
+	if err != nil {
+		return fmt.Errorf("unable to generate resource manifests for shoot: %w", err)
+	}
+
+	shootResources, err := managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer).AddAllAndSerialize(objects...)
+	if err != nil {
+		return fmt.Errorf("unable to create registry: %w", err)
+	}
+
+	err = managedresources.CreateForShoot(ctx, a.client, ex.Namespace, constants.CSIDriverName, constants.ExtensionType, false, shootResources)
+	if err != nil {
+		return fmt.Errorf("unable to create shoot resources: %w", err)
 	}
 
 	log.Info("Successfully reconciled Synology CSI extension")
@@ -118,11 +134,15 @@ func (a *Actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	log.Info("Deleting Synology CSI extension", "namespace", namespace)
 
 	// Create Synology client
-	synologyClient := synology.NewClient(
+	synologyClient, err := synology.NewClient(
 		a.config.SynologyURL,
 		a.config.AdminUsername,
 		a.config.AdminPassword,
 	)
+
+	if err != nil {
+		return fmt.Errorf("unable to create Synology client: %w", err)
+	}
 
 	// Login to Synology
 	if err := synologyClient.Login(); err != nil {
@@ -162,45 +182,34 @@ func (a *Actuator) ForceDelete(ctx context.Context, log logr.Logger, ex *extensi
 }
 
 // deployResources deploys all necessary resources to the shoot cluster
-func (a *Actuator) deployResources(ctx context.Context, log logr.Logger, config *synology.ManifestConfig) error {
-	// Deploy in order: RBAC -> Config -> Deployment
-
+func (a *Actuator) deployResources(ctx context.Context, log logr.Logger, config *synology.ManifestConfig) ([]client.Object, error) {
 	secret, err := synology.GenerateSecret(config)
 	if err != nil {
-		return fmt.Errorf("failed to generate secret: %w", err)
+		return nil, fmt.Errorf("failed to generate secret: %w", err)
 	}
 
 	configMap, err := synology.GenerateConfigMap(config)
 	if err != nil {
-		return fmt.Errorf("failed to generate configmap: %w", err)
+		return nil, fmt.Errorf("failed to generate configmap: %w", err)
 	}
 
-	resources := []struct {
-		name   string
-		object client.Object
-	}{
-		{"ServiceAccount (Controller)", synology.GenerateServiceAccount(config.Namespace, constants.ControllerName)},
-		{"ServiceAccount (Node)", synology.GenerateServiceAccount(config.Namespace, constants.NodeName)},
-		{"ClusterRole (Controller)", synology.GenerateControllerClusterRole()},
-		{"ClusterRole (Node)", synology.GenerateNodeClusterRole()},
-		{"ClusterRoleBinding (Controller)", synology.GenerateClusterRoleBinding(constants.ControllerName, config.Namespace, constants.ControllerName)},
-		{"ClusterRoleBinding (Node)", synology.GenerateClusterRoleBinding(constants.NodeName, config.Namespace, constants.NodeName)},
-		{"Secret", secret},
-		{"ConfigMap", configMap},
-		{"CSIDriver", synology.GenerateCSIDriver()},
-		{"Service", synology.GenerateService(config.Namespace)},
-		{"Deployment (Controller)", synology.GenerateControllerDeployment(config.Namespace)},
-		{"DaemonSet (Node)", synology.GenerateNodeDaemonSet(config.Namespace)},
-		{"StorageClass", synology.GenerateStorageClass(config.Namespace)},
+	objects := []client.Object{
+		synology.GenerateServiceAccount(config.Namespace, constants.ControllerName),
+		synology.GenerateServiceAccount(config.Namespace, constants.NodeName),
+		synology.GenerateControllerClusterRole(),
+		synology.GenerateNodeClusterRole(),
+		synology.GenerateClusterRoleBinding(constants.ControllerName, config.Namespace, constants.ControllerName),
+		synology.GenerateClusterRoleBinding(constants.NodeName, config.Namespace, constants.NodeName),
+		secret,
+		configMap,
+		synology.GenerateCSIDriver(),
+		synology.GenerateService(config.Namespace),
+		synology.GenerateControllerDeployment(config.Namespace),
+		synology.GenerateNodeDaemonSet(config.Namespace),
+		synology.GenerateStorageClass(config.Namespace),
 	}
 
-	for _, r := range resources {
-		if err := a.createOrUpdate(ctx, log, r.object, r.name); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return objects, nil
 }
 
 // deleteResources deletes all resources from the shoot cluster

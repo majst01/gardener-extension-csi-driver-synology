@@ -23,7 +23,22 @@ This extension integrates the [Synology CSI Driver](https://github.com/SynologyO
 can be started with a docker container like so:
 
 ```bash
-docker run -it --rm --name dsm -e "DISK_SIZE=256G" -p 5000:5000 --device=/dev/kvm --device=/dev/net/tun --cap-add NET_ADMIN -v "${PWD:-.}/dsm:/storage" --stop-timeout 120 docker.io/vdsm/virtual-dsm
+docker run -it --rm --name dsm \
+  --network kind \
+  -e "DISK_SIZE=256G" \
+  -p 5000:5000 \
+  --device=/dev/kvm --device=/dev/net/tun --cap-add NET_ADMIN \
+  -v "${PWD:-.}/dsm:/storage" \
+  --stop-timeout 120 \
+  docker.io/vdsm/virtual-dsm
+```
+
+Reachability can be tested with:
+
+```bash
+kubectl run -it --rm nettest \
+  --image=curlimages/curl --restart=Never -- \
+  curl -4 -v --connect-timeout 5 --max-time 5 http://172.18.0.2:5000
 ```
 
 ## Configuration

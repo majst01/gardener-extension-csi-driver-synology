@@ -9,99 +9,182 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"path"
+	"strings"
 	"time"
 )
 
-// Client represents a Synology DSM API client
 type Client struct {
-	url        string
+	baseURL    *url.URL
 	username   string
 	password   string
 	sessionID  string
+	synoToken  string
 	httpClient *http.Client
 }
 
-// NewClient creates a new Synology API client
-func NewClient(url, username, password string) *Client {
+func NewClient(base, username, password string) (*Client, error) {
+	u, err := url.Parse(base)
+	if err != nil {
+		return nil, fmt.Errorf("invalid base url %q: %w", base, err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return nil, fmt.Errorf("invalid base url %q: missing scheme/host", base)
+	}
+
 	return &Client{
-		url:      url,
+		baseURL:  u,
 		username: username,
 		password: password,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 			Transport: &http.Transport{
+				// dev-friendly; for production you should validate certs
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
 		},
-	}
+	}, nil
 }
 
-// baseURL returns the base URL for API calls
-func (c *Client) baseURL() string {
-	return fmt.Sprintf("%s/webapi", c.url)
+func (c *Client) webapiURL(file string) string {
+	u := *c.baseURL // copy
+	u.Path = path.Join(u.Path, "/webapi/", file)
+	return u.String()
 }
 
-// Login authenticates with the Synology NAS
+type apiError struct {
+	Code int `json:"code"`
+}
+
+type loginResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		Account   string `json:"account"`
+		SID       string `json:"sid"`
+		SynoToken string `json:"synotoken"`
+	} `json:"data"`
+	Error *apiError `json:"error,omitempty"`
+}
+
+type simpleResult struct {
+	Success bool      `json:"success"`
+	Error   *apiError `json:"error,omitempty"`
+}
+
+// Login authenticates with DSM and stores SID + SynoToken.
+// This matches the working script:
+// - session=Core
+// - format=sid
+// - enable_syno_token=yes
 func (c *Client) Login() error {
-	params := url.Values{}
-	params.Add("api", "SYNO.API.Auth")
-	params.Add("version", "3")
-	params.Add("method", "login")
-	params.Add("account", c.username)
-	params.Add("passwd", c.password)
-	params.Add("session", "FileStation")
-	params.Add("format", "sid")
-
-	resp, err := c.httpClient.Get(c.baseURL() + "/auth.cgi?" + params.Encode())
+	u, err := url.Parse(c.webapiURL("entry.cgi"))
 	if err != nil {
-		return fmt.Errorf("failed to login: %w", err)
+		return fmt.Errorf("build login url: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("api", "SYNO.API.Auth")
+	q.Set("version", "7")
+	q.Set("method", "login")
+	q.Set("account", c.username)
+	q.Set("passwd", c.password)
+	q.Set("session", "Core")
+	q.Set("format", "sid")
+	q.Set("enable_syno_token", "yes")
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return fmt.Errorf("build login request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("login request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
+		return fmt.Errorf("read login response: %w", err)
 	}
 
-	var result struct {
-		Success bool `json:"success"`
-		Data    struct {
-			SID string `json:"sid"`
-		} `json:"data"`
-		Error struct {
-			Code int `json:"code"`
-		} `json:"error"`
+	var lr loginResponse
+	if err := json.Unmarshal(body, &lr); err != nil {
+		return fmt.Errorf("parse login response: %w (body=%q)", err, string(body))
 	}
 
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
+	if !lr.Success {
+		code := -1
+		if lr.Error != nil {
+			code = lr.Error.Code
+		}
+		return fmt.Errorf("login failed (code=%d, body=%s)", code, string(body))
 	}
 
-	if !result.Success {
-		return fmt.Errorf("login failed with error code: %d", result.Error.Code)
+	if lr.Data.SID == "" {
+		return fmt.Errorf("login succeeded but sid is empty (body=%s)", string(body))
+	}
+	if lr.Data.SynoToken == "" {
+		return fmt.Errorf("login succeeded but synotoken is empty (body=%s)", string(body))
 	}
 
-	c.sessionID = result.Data.SID
+	c.sessionID = lr.Data.SID
+	c.synoToken = lr.Data.SynoToken
 	return nil
 }
 
-// CreateUser creates a new user on the Synology NAS
+func (c *Client) ensureLogin() error {
+	if c.sessionID != "" && c.synoToken != "" {
+		return nil
+	}
+	return c.Login()
+}
+
+func decodeResult(body []byte, out any) error {
+	if err := json.Unmarshal(body, out); err != nil {
+		return fmt.Errorf("failed to parse response: %w (body=%q)", err, string(body))
+	}
+	return nil
+}
+
+func extractCode(r *simpleResult) int {
+	if r == nil || r.Error == nil {
+		return -1
+	}
+	return r.Error.Code
+}
+
+// CreateUser creates a new user on the Synology NAS.
+// Uses GET + query params (like the working script) and sends X-SYNO-TOKEN.
 func (c *Client) CreateUser(username, password string) error {
-	if c.sessionID == "" {
-		if err := c.Login(); err != nil {
-			return err
-		}
+	if err := c.ensureLogin(); err != nil {
+		return err
 	}
 
-	params := url.Values{}
-	params.Add("api", "SYNO.Core.User")
-	params.Add("method", "create")
-	params.Add("version", "1")
-	params.Add("name", username)
-	params.Add("password", password)
-	params.Add("_sid", c.sessionID)
+	u, err := url.Parse(c.webapiURL("entry.cgi"))
+	if err != nil {
+		return fmt.Errorf("build create user url: %w", err)
+	}
 
-	resp, err := c.httpClient.PostForm(c.baseURL()+"/entry.cgi", params)
+	q := u.Query()
+	q.Set("api", "SYNO.Core.User")
+	q.Set("version", "1")
+	q.Set("method", "create")
+	q.Set("name", username)
+	q.Set("password", password)
+	q.Set("_sid", c.sessionID)
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return fmt.Errorf("build create user request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-SYNO-TOKEN", c.synoToken)
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
@@ -112,44 +195,60 @@ func (c *Client) CreateUser(username, password string) error {
 		return fmt.Errorf("failed to read response: %w", err)
 	}
 
-	var result struct {
-		Success bool `json:"success"`
-		Error   struct {
-			Code int `json:"code"`
-		} `json:"error"`
-	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
+	var result simpleResult
+	if err := decodeResult(body, &result); err != nil {
+		return err
 	}
 
 	if !result.Success {
-		// User already exists (error code 407)
-		if result.Error.Code == 407 {
+		code := extractCode(&result)
+		// User already exists (your previous behavior)
+		if code == 407 {
 			return nil
 		}
-		return fmt.Errorf("create user failed with error code: %d", result.Error.Code)
+		// Common DSM7 issue when token/sid missing/expired
+		if code == 119 {
+			// force relogin once and retry
+			c.sessionID, c.synoToken = "", ""
+			if err := c.ensureLogin(); err != nil {
+				return err
+			}
+			return c.CreateUser(username, password)
+		}
+		return fmt.Errorf("create user failed with error code: %d (body=%s)", code, string(body))
 	}
 
 	return nil
 }
 
-// DeleteUser deletes a user from the Synology NAS
+// DeleteUser deletes a user from the Synology NAS.
+// Uses GET + query params and sends X-SYNO-TOKEN.
 func (c *Client) DeleteUser(username string) error {
-	if c.sessionID == "" {
-		if err := c.Login(); err != nil {
-			return err
-		}
+	if err := c.ensureLogin(); err != nil {
+		return err
 	}
 
-	params := url.Values{}
-	params.Add("api", "SYNO.Core.User")
-	params.Add("method", "delete")
-	params.Add("version", "1")
-	params.Add("name", username)
-	params.Add("_sid", c.sessionID)
+	u, err := url.Parse(c.webapiURL("entry.cgi"))
+	if err != nil {
+		return fmt.Errorf("build delete user url: %w", err)
+	}
 
-	resp, err := c.httpClient.PostForm(c.baseURL()+"/entry.cgi", params)
+	q := u.Query()
+	q.Set("api", "SYNO.Core.User")
+	q.Set("version", "1")
+	q.Set("method", "delete")
+	q.Set("name", username)
+	q.Set("_sid", c.sessionID)
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return fmt.Errorf("build delete user request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-SYNO-TOKEN", c.synoToken)
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
@@ -160,47 +259,74 @@ func (c *Client) DeleteUser(username string) error {
 		return fmt.Errorf("failed to read response: %w", err)
 	}
 
-	var result struct {
-		Success bool `json:"success"`
-		Error   struct {
-			Code int `json:"code"`
-		} `json:"error"`
-	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
+	var result simpleResult
+	if err := decodeResult(body, &result); err != nil {
+		return err
 	}
 
 	if !result.Success {
-		// Ignore error if user doesn't exist
-		if result.Error.Code == 407 {
+		code := extractCode(&result)
+		// Ignore error if user doesn't exist (your previous behavior)
+		if code == 407 {
 			return nil
 		}
-		return fmt.Errorf("delete user failed with error code: %d", result.Error.Code)
+		if code == 119 {
+			// force relogin once and retry
+			c.sessionID, c.synoToken = "", ""
+			if err := c.ensureLogin(); err != nil {
+				return err
+			}
+			return c.DeleteUser(username)
+		}
+		return fmt.Errorf("delete user failed with error code: %d (body=%s)", code, string(body))
 	}
 
 	return nil
 }
 
-// Logout ends the session
+// Logout ends the session.
+// Uses session=Core and sends X-SYNO-TOKEN (safe) + _sid.
 func (c *Client) Logout() error {
 	if c.sessionID == "" {
 		return nil
 	}
 
-	params := url.Values{}
-	params.Add("api", "SYNO.API.Auth")
-	params.Add("version", "1")
-	params.Add("method", "logout")
-	params.Add("session", "FileStation")
-	params.Add("_sid", c.sessionID)
+	u, err := url.Parse(c.webapiURL("entry.cgi"))
+	if err != nil {
+		return fmt.Errorf("build logout url: %w", err)
+	}
 
-	_, err := c.httpClient.Get(c.baseURL() + "/auth.cgi?" + params.Encode())
+	q := u.Query()
+	q.Set("api", "SYNO.API.Auth")
+	q.Set("version", "7")
+	q.Set("method", "logout")
+	q.Set("session", "Core")
+	q.Set("_sid", c.sessionID)
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return fmt.Errorf("build logout request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	if c.synoToken != "" {
+		req.Header.Set("X-SYNO-TOKEN", c.synoToken)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		// clear anyway
+		c.sessionID, c.synoToken = "", ""
+		return fmt.Errorf("logout request failed: %w", err)
+	}
+	_ = resp.Body.Close()
+
 	c.sessionID = ""
-	return err
+	c.synoToken = ""
+	return nil
 }
 
-// GenerateRandomPassword generates a random password
+// GenerateRandomPassword generates a random password.
 func GenerateRandomPassword(length int) (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
 	password := make([]byte, length)
@@ -216,7 +342,9 @@ func GenerateRandomPassword(length int) (string, error) {
 	return string(password), nil
 }
 
-// GenerateShootUsername generates a username for a shoot cluster
+// GenerateShootUsername generates a username for a shoot cluster.
 func GenerateShootUsername(shootName, shootNamespace string) string {
-	return fmt.Sprintf("gardener-%s-%s", shootNamespace, shootName)
+	// keep it simple: Synology usernames are typically restricted; avoid uppercase/specials
+	s := fmt.Sprintf("gardener-%s-%s", shootNamespace, shootName)
+	return strings.ToLower(s)
 }

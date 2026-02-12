@@ -29,9 +29,9 @@ config:
     burst: 130
 
 synology:
-  url: "http://localhost:5123"
-  adminUsername: "admin"
-  adminPassword: "admin"
+  url: "http://172.18.0.2:5000"
+  adminUsername: "olli"
+  adminPassword: "AsdfAsdf1.?"
 
 chap:
   enabled: true
