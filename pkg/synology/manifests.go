@@ -37,10 +37,6 @@ type ManifestConfig struct {
 
 	// Helm-like multi-client config (preferred).
 	Clients []ClientConfig
-
-	ChapEnabled  bool
-	ChapUsername string
-	ChapPassword string
 }
 
 // GenerateNamespace generates the namespace for the CSI driver
@@ -335,18 +331,6 @@ func GenerateSecret(config *ManifestConfig) (*corev1.Secret, error) {
 			"client-info.yaml": clientInfoYAML,
 		},
 	}
-
-	// Keep CHAP settings if your driver/stack expects them in the same secret.
-	// (Not present in the upstream Helm example, but retaining for compatibility.)
-	if config.ChapEnabled {
-		if secret.StringData == nil {
-			secret.StringData = map[string]string{}
-		}
-		secret.StringData["chap-enabled"] = "true"
-		secret.StringData["chap-username"] = config.ChapUsername
-		secret.StringData["chap-password"] = config.ChapPassword
-	}
-
 	return secret, nil
 }
 

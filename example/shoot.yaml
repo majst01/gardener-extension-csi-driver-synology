@@ -19,7 +19,6 @@ spec:
         kind: CsiDriverSynologyConfig
         # Your configuration here
         synologyURL: ""
-        chapEnabled: false
         username: admin
         password: admin
   networking:

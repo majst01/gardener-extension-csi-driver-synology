@@ -40,7 +40,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 
 func autoConvert_v1alpha1_CsiDriverSynologyConfig_To_csidriversynology_CsiDriverSynologyConfig(in *CsiDriverSynologyConfig, out *csidriversynology.CsiDriverSynologyConfig, s conversion.Scope) error {
 	out.SynologyURL = in.SynologyURL
-	out.ChapEnabled = in.ChapEnabled
 	out.Username = in.Username
 	out.Password = in.Password
 	out.HealthCheckConfig = (*configv1alpha1.HealthCheckConfig)(unsafe.Pointer(in.HealthCheckConfig))
@@ -54,7 +53,6 @@ func Convert_v1alpha1_CsiDriverSynologyConfig_To_csidriversynology_CsiDriverSyno
 
 func autoConvert_csidriversynology_CsiDriverSynologyConfig_To_v1alpha1_CsiDriverSynologyConfig(in *csidriversynology.CsiDriverSynologyConfig, out *CsiDriverSynologyConfig, s conversion.Scope) error {
 	out.SynologyURL = in.SynologyURL
-	out.ChapEnabled = in.ChapEnabled
 	out.Username = in.Username
 	out.Password = in.Password
 	out.HealthCheckConfig = (*configv1alpha1.HealthCheckConfig)(unsafe.Pointer(in.HealthCheckConfig))

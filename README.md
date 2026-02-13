@@ -11,7 +11,6 @@ This extension integrates the [Synology CSI Driver](https://github.com/SynologyO
 
 - Automatic deployment of Synology CSI driver to shoot clusters
 - Automatic user creation per shoot cluster on Synology NAS
-- iSCSI protocol support with CHAP authentication
 - Dynamic volume provisioning
 - Volume expansion support
 - Volume snapshot support
@@ -65,7 +64,7 @@ providerConfig:
       ssl: true
       adminUsername: "admin"
       adminPassword: "your-admin-password"
-    # IMPORTANT: Chap is yet not implemented in csi-driver
+    # IMPORTANT: Chap is yet not implemented in synology csi-driver https://github.com/SynologyOpenSource/synology-csi/issues/63
     # chap:
     #   enabled: true
 ```

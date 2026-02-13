@@ -14,9 +14,6 @@ type CsiDriverSynologyConfig struct {
 	// SynologyURL is the URL of the Synology NAS
 	SynologyURL string
 
-	// ChapEnabled indicates whether CHAP authentication is enabled
-	ChapEnabled bool
-
 	// Username is the username for creating shoot-specific volumes
 	Username string
 

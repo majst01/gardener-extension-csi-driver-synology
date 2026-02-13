@@ -33,9 +33,6 @@ synology:
   adminUsername: "olli"
   adminPassword: "AsdfAsdf1.?"
 
-chap:
-  enabled: true
-
 serviceAccount:
   create: true
   name: gardener-extension-csi-driver-synology

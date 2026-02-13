@@ -14,9 +14,6 @@ type ControllerConfiguration struct {
 	// SynologyURL is the URL of the Synology NAS
 	SynologyURL string `json:"synologyURL,omitempty"`
 
-	// ChapEnabled indicates whether CHAP authentication is enabled
-	ChapEnabled bool `json:"chapEnabled,omitempty"`
-
 	// AdminUsername is the admin username for creating shoot-specific users
 	AdminUsername string `json:"adminUsername,omitempty"`
 

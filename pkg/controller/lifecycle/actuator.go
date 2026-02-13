@@ -87,16 +87,6 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return fmt.Errorf("failed to create user on Synology: %w", err)
 	}
 
-	// Generate CHAP credentials if enabled
-	var chapUsername, chapPassword string
-	if a.config.ChapEnabled {
-		chapUsername = shootUsername + "-chap"
-		chapPassword, err = synology.GenerateRandomPassword(16)
-		if err != nil {
-			return fmt.Errorf("failed to generate CHAP password: %w", err)
-		}
-	}
-
 	u, err := url.Parse(a.config.SynologyURL)
 	if err != nil {
 		return fmt.Errorf("failed to parse synology-url: %w", err)
@@ -109,13 +99,10 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	// Create manifest config
 	manifestConfig := &synology.ManifestConfig{
-		Namespace:    "kube-system",
-		Url:          a.config.SynologyURL,
-		Username:     shootUsername,
-		Password:     shootPassword,
-		ChapEnabled:  a.config.ChapEnabled,
-		ChapUsername: chapUsername,
-		ChapPassword: chapPassword,
+		Namespace: "kube-system",
+		Url:       a.config.SynologyURL,
+		Username:  shootUsername,
+		Password:  shootPassword,
 		Clients: []synology.ClientConfig{
 			{
 				Host:     u.Hostname(),
