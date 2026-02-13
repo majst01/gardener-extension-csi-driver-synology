@@ -6,10 +6,13 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
+	"github.com/gardener/gardener/pkg/apis/core/helper"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
+	"github.com/gardener/gardener/pkg/extensions"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
@@ -58,9 +61,11 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	log.Info("Reconciling Synology CSI extension", "namespace", namespace)
 
+	//TODO extract credentials from secret
+
 	// Create Synology client
 	synologyClient, err := synology.NewClient(
-		a.config.SynologyURL,
+		a.config.SynologyConfig.URL,
 		a.config.AdminUsername,
 		a.config.AdminPassword,
 	)
@@ -87,7 +92,7 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return fmt.Errorf("failed to create user on Synology: %w", err)
 	}
 
-	u, err := url.Parse(a.config.SynologyURL)
+	u, err := url.Parse(a.config.SynologyConfig.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse synology-url: %w", err)
 	}
@@ -100,7 +105,7 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	// Create manifest config
 	manifestConfig := &synology.ManifestConfig{
 		Namespace: "kube-system",
-		Url:       a.config.SynologyURL,
+		Url:       a.config.SynologyConfig.URL,
 		Username:  shootUsername,
 		Password:  shootPassword,
 		Clients: []synology.ClientConfig{
@@ -289,4 +294,41 @@ func (a *Actuator) deleteResourcesByType(ctx context.Context, obj client.Object,
 	}
 
 	return nil
+}
+
+func (a *Actuator) findSynologySecret(ctx context.Context, cluster *extensions.Cluster, secretName string) (*corev1.Secret, error) {
+	fromShootResources := func() (*corev1.Secret, error) {
+		secretRef := helper.GetResourceByName(cluster.Shoot.Spec.Resources, secretName)
+		if secretRef == nil {
+			return nil, nil
+		}
+
+		secret := &corev1.Secret{}
+		err := controller.GetObjectByReference(ctx, a.client, &secretRef.ResourceRef, cluster.ObjectMeta.Name, secret)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get referenced secret: %w", err)
+		}
+
+		return secret, nil
+	}
+
+	secret, err := fromShootResources()
+	if err != nil {
+		return nil, err
+	}
+
+	if secret == nil {
+		// if the secret is not referenced in the shoot resources it may be defined in the default backend secrets
+		if len(defaultBackendSecrets) > 0 {
+			var ok bool
+			secret, ok = defaultBackendSecrets[secretName]
+			if !ok {
+				return nil, fmt.Errorf("secret resource with name %q not found in default backend secrets", secretName)
+			}
+		} else {
+			return nil, fmt.Errorf("secret resource with name %q not found in shoot resources", secretName)
+		}
+	}
+
+	return secret, nil
 }

@@ -11,15 +11,23 @@ import (
 type ControllerConfiguration struct {
 	metav1.TypeMeta
 
-	// SynologyURL is the URL of the Synology NAS
-	SynologyURL string
-
-	// AdminUsername is the admin username for creating shoot-specific users
-	AdminUsername string
-
-	// AdminPassword is the admin password for creating shoot-specific users
-	AdminPassword string
+	// Synology holds the Synology-specific configuration block ("synology:" im YAML)
+	SynologyConfig SynologyConfiguration
 
 	// HealthCheckConfig is the config for the health check controller
 	HealthCheckConfig *apisconfigv1alpha1.HealthCheckConfig
+}
+
+type SynologyConfiguration struct {
+	URL            string
+	SecretRef      string
+	StorageClasses SynologyStorageClasses
+}
+
+type SynologyStorageClasses struct {
+	ISCSI ISCSIStorageClass
+}
+
+type ISCSIStorageClass struct {
+	Parameters map[string]string
 }

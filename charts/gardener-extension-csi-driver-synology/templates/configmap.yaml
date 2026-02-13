@@ -17,6 +17,5 @@ data:
       qps: {{ required ".Values.config.clientConnection.qps is required" .Values.config.clientConnection.qps }}
       burst: {{ required ".Values.config.clientConnection.burst is required" .Values.config.clientConnection.burst }}
 {{- end }}
-    synologyURL: {{ .Values.synology.url }}
-    adminUsername: {{ .Values.synology.adminUsername }}
-    adminPassword: {{ .Values.synology.adminPassword }}
+    synology:
+{{- required ".Values.synology is required" .Values.synology | toYaml | nindent 6 }}

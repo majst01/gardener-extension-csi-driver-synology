@@ -29,9 +29,17 @@ config:
     burst: 130
 
 synology:
-  url: "http://172.18.0.2:5000"
-  adminUsername: "olli"
-  adminPassword: "AsdfAsdf1.?"
+  url: http://172.18.0.2:5000
+  secretRef: synology-credentials-info
+  storageClasses:
+    iscsi:
+      parameters:
+        protocol: iscsi
+        dsm: 172.18.0.2
+        fsType: ext4
+        location: /volume1
+        storageOptions: --no-discard
+        mountPemissions: 0750
 
 serviceAccount:
   create: true

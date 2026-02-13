@@ -11,16 +11,26 @@ import (
 type ControllerConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
 
-	// SynologyURL is the URL of the Synology NAS
-	SynologyURL string `json:"synologyURL,omitempty"`
-
-	// AdminUsername is the admin username for creating shoot-specific users
-	AdminUsername string `json:"adminUsername,omitempty"`
-
-	// AdminPassword is the admin password for creating shoot-specific users
-	AdminPassword string `json:"adminPassword,omitempty"`
+	// Synology holds the Synology-specific configuration
+	SynologyConfig SynologyConfiguration `json:"synology"`
 
 	// HealthCheckConfig is the config for the health check controller
 	// +optional
 	HealthCheckConfig *apisconfigv1alpha1.HealthCheckConfig `json:"healthCheckConfig,omitempty"`
+}
+
+type SynologyConfiguration struct {
+	URL       string `json:"url"`
+	SecretRef string `json:"secretRef"`
+
+	// StorageClasses defines storage class configuration
+	StorageClasses SynologyStorageClasses `json:"storageClasses"`
+}
+
+type SynologyStorageClasses struct {
+	ISCSI ISCSIStorageClass `json:"iscsi"`
+}
+
+type ISCSIStorageClass struct {
+	Parameters map[string]string `json:"parameters"`
 }
