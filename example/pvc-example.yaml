@@ -8,7 +8,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 1Gi
   storageClassName: synology-iscsi
 ---
 apiVersion: v1
@@ -17,12 +17,12 @@ metadata:
   name: test-pod
 spec:
   containers:
-  - name: test-container
-    image: nginx:latest
-    volumeMounts:
-    - name: data
-      mountPath: /data
+    - name: test-container
+      image: nginx:latest
+      volumeMounts:
+        - name: data
+          mountPath: /data
   volumes:
-  - name: data
-    persistentVolumeClaim:
-      claimName: my-pvc
+    - name: data
+      persistentVolumeClaim:
+        claimName: my-pvc

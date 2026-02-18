@@ -3,97 +3,172 @@ package lifecycle
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strconv"
 
+	extensionsconfigv1alpha1 "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
+	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
-	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	gutil "github.com/gardener/gardener/extensions/pkg/util"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
+	"github.com/gardener/gardener/pkg/extensions"
+	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/config"
+	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/csidriversynology/v1alpha1"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/constants"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/synology"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	storagev1 "k8s.io/api/storage/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Actuator acts upon Extension resources
 type Actuator struct {
-	client client.Client
-	config *config.Configuration
+	client  client.Client
+	decoder runtime.Decoder
+	config  config.ControllerConfiguration
 }
 
 // NewActuator creates a new Actuator
-func NewActuator(client client.Client, config *config.Configuration) extension.Actuator {
+func NewActuator(client client.Client, config config.ControllerConfiguration) extension.Actuator {
 	return &Actuator{
-		client: client,
-		config: config,
+		client:  client,
+		decoder: serializer.NewCodecFactory(client.Scheme(), serializer.EnableStrict).UniversalDecoder(),
+		config:  config,
 	}
 }
 
 // Reconcile the Extension resource
 func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
+	shootConfig := &v1alpha1.CsiDriverSynologyConfig{}
+	if ex.Spec.ProviderConfig != nil {
+		_, _, err := a.decoder.Decode(ex.Spec.ProviderConfig.Raw, nil, shootConfig)
+		if err != nil {
+			return fmt.Errorf("failed to decode provider config: %w", err)
+		}
+	}
+
 	namespace := ex.GetNamespace()
 	shootName := namespace
 	shootNamespace := namespace
 
 	log.Info("Reconciling Synology CSI extension", "namespace", namespace)
 
+	cluster, err := controller.GetCluster(ctx, a.client, namespace)
+	if err != nil {
+		return err
+	}
+
+	secret, err := a.getAdminSynologySecret(ctx, cluster, a.config.SynologyConfig.SecretRef)
+	if err != nil {
+		return err
+	}
+
+	adminUsername, adminPassword, err := extractAdminSynologySecret(secret)
+	if err != nil {
+		return err
+	}
+
 	// Create Synology client
-	synologyClient := synology.NewClient(
-		a.config.SynologyHost,
-		a.config.SynologyPort,
-		a.config.SynologySSL,
-		a.config.AdminUsername,
-		a.config.AdminPassword,
+	synologyClient, err := synology.NewClient(
+		a.config.SynologyConfig.URL,
+		adminUsername,
+		adminPassword,
 	)
 
-	// Login to Synology
+	if err != nil {
+		return fmt.Errorf("failed to create Synology client: %w", err)
+	}
+
 	if err := synologyClient.Login(); err != nil {
 		return fmt.Errorf("failed to login to Synology NAS: %w", err)
 	}
 	defer synologyClient.Logout()
 
-	// Generate credentials for this shoot
 	shootUsername := synology.GenerateShootUsername(shootName, shootNamespace)
-	shootPassword, err := synology.GenerateRandomPassword(16)
+	shootPassword := ""
+
+	user, err := synologyClient.GetUser(shootUsername)
 	if err != nil {
-		return fmt.Errorf("failed to generate password: %w", err)
+		return fmt.Errorf("failed to get user from Synology: %w", err)
 	}
 
-	// Create user on Synology
-	if err := synologyClient.CreateUser(shootUsername, shootPassword); err != nil {
-		return fmt.Errorf("failed to create user on Synology: %w", err)
-	}
-
-	// Generate CHAP credentials if enabled
-	var chapUsername, chapPassword string
-	if a.config.ChapEnabled {
-		chapUsername = shootUsername + "-chap"
-		chapPassword, err = synology.GenerateRandomPassword(16)
+	if user == nil {
+		shootPassword, err = synology.GenerateRandomPassword(16)
 		if err != nil {
-			return fmt.Errorf("failed to generate CHAP password: %w", err)
+			return fmt.Errorf("failed to generate password: %w", err)
 		}
+
+		if err := synologyClient.CreateUser(shootUsername, shootPassword); err != nil {
+			return fmt.Errorf("failed to create user on Synology: %w", err)
+		}
+	} else {
+		secret, err := a.getShootSynologySecret(ctx, ex.Namespace)
+		if err != nil {
+			return err
+		}
+
+		_, shootPwd, err := extractShootSynologySecret(secret)
+		if err != nil {
+			return err
+		}
+
+		shootPassword = shootPwd
+	}
+
+	u, err := url.Parse(a.config.SynologyConfig.URL)
+	if err != nil {
+		return fmt.Errorf("failed to parse synology-url: %w", err)
+	}
+
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		return fmt.Errorf("failed to parse synology-url port: %w", err)
 	}
 
 	// Create manifest config
 	manifestConfig := &synology.ManifestConfig{
-		Namespace:    v1beta1constants.GardenNamespace,
-		Host:         a.config.SynologyHost,
-		Port:         a.config.SynologyPort,
-		UseSSL:       a.config.SynologySSL,
-		Username:     shootUsername,
-		Password:     shootPassword,
-		ChapEnabled:  a.config.ChapEnabled,
-		ChapUsername: chapUsername,
-		ChapPassword: chapPassword,
+		Namespace: constants.ShootTargetNamespace,
+		Url:       a.config.SynologyConfig.URL,
+		Username:  shootUsername,
+		Password:  shootPassword,
+		Clients: []synology.ClientConfig{
+			{
+				Host:     u.Hostname(),
+				Port:     port,
+				HTTPS:    u.Scheme == "https",
+				Username: shootUsername,
+				Password: shootPassword,
+			},
+			{
+				Host:     u.Hostname(),
+				Port:     5001,
+				HTTPS:    u.Scheme == "https",
+				Username: shootUsername,
+				Password: shootPassword,
+			},
+		},
 	}
 
-	// Deploy resources to shoot cluster
-	if err := a.deployResources(ctx, log, manifestConfig); err != nil {
-		return fmt.Errorf("failed to deploy resources: %w", err)
+	objects, err := a.generateManifests(manifestConfig)
+	if err != nil {
+		return fmt.Errorf("unable to generate resource manifests for shoot: %w", err)
+	}
+
+	shootResources, err := managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer).AddAllAndSerialize(objects...)
+	if err != nil {
+		return fmt.Errorf("unable to create registry: %w", err)
+	}
+
+	err = managedresources.CreateForShoot(ctx, a.client, ex.Namespace, constants.CSIDriverName, constants.ExtensionType, false, shootResources)
+	if err != nil {
+		return fmt.Errorf("unable to create shoot resources: %w", err)
 	}
 
 	log.Info("Successfully reconciled Synology CSI extension")
@@ -102,40 +177,6 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 // Delete the Extension resource
 func (a *Actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
-	namespace := ex.GetNamespace()
-	shootName := namespace
-	shootNamespace := namespace
-
-	log.Info("Deleting Synology CSI extension", "namespace", namespace)
-
-	// Create Synology client
-	synologyClient := synology.NewClient(
-		a.config.SynologyHost,
-		a.config.SynologyPort,
-		a.config.SynologySSL,
-		a.config.AdminUsername,
-		a.config.AdminPassword,
-	)
-
-	// Login to Synology
-	if err := synologyClient.Login(); err != nil {
-		log.Error(err, "Failed to login to Synology NAS, continuing with resource deletion")
-	} else {
-		defer synologyClient.Logout()
-
-		// Delete user from Synology
-		shootUsername := synology.GenerateShootUsername(shootName, shootNamespace)
-		if err := synologyClient.DeleteUser(shootUsername); err != nil {
-			log.Error(err, "Failed to delete user from Synology", "username", shootUsername)
-		}
-	}
-
-	// Delete resources from shoot cluster
-	if err := a.deleteResources(ctx, log, v1beta1constants.GardenNamespace); err != nil {
-		return fmt.Errorf("failed to delete resources: %w", err)
-	}
-
-	log.Info("Successfully deleted Synology CSI extension")
 	return nil
 }
 
@@ -151,105 +192,120 @@ func (a *Actuator) Migrate(ctx context.Context, log logr.Logger, ex *extensionsv
 
 // ForceDelete forcefully deletes the Extension resource
 func (a *Actuator) ForceDelete(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
-	return a.Delete(ctx, log, ex)
-}
-
-// deployResources deploys all necessary resources to the shoot cluster
-func (a *Actuator) deployResources(ctx context.Context, log logr.Logger, config *synology.ManifestConfig) error {
-	// Deploy in order: RBAC -> Config -> Deployment
-	resources := []struct {
-		name   string
-		object client.Object
-	}{
-		{"ServiceAccount (Controller)", synology.GenerateServiceAccount(config.Namespace, constants.ControllerName)},
-		{"ServiceAccount (Node)", synology.GenerateServiceAccount(config.Namespace, constants.NodeName)},
-		{"ClusterRole (Controller)", synology.GenerateControllerClusterRole()},
-		{"ClusterRole (Node)", synology.GenerateNodeClusterRole()},
-		{"ClusterRoleBinding (Controller)", synology.GenerateClusterRoleBinding(constants.ControllerName, config.Namespace, constants.ControllerName)},
-		{"ClusterRoleBinding (Node)", synology.GenerateClusterRoleBinding(constants.NodeName, config.Namespace, constants.NodeName)},
-		{"Secret", synology.GenerateSecret(config)},
-		{"ConfigMap", synology.GenerateConfigMap(config)},
-		{"CSIDriver", synology.GenerateCSIDriver()},
-		{"Service", synology.GenerateService(config.Namespace)},
-		{"Deployment (Controller)", synology.GenerateControllerDeployment(config.Namespace)},
-		{"DaemonSet (Node)", synology.GenerateNodeDaemonSet(config.Namespace)},
-		{"StorageClass", synology.GenerateStorageClass(config.Namespace)},
-	}
-
-	for _, r := range resources {
-		if err := a.createOrUpdate(ctx, log, r.object, r.name); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
-// deleteResources deletes all resources from the shoot cluster
-func (a *Actuator) deleteResources(ctx context.Context, log logr.Logger, namespace string) error {
-	resources := []client.Object{
-		&appsv1.DaemonSet{},
-		&appsv1.Deployment{},
-		&corev1.Service{},
-		&storagev1.CSIDriver{},
-		&corev1.ConfigMap{},
-		&corev1.Secret{},
-		&rbacv1.ClusterRoleBinding{},
-		&rbacv1.ClusterRole{},
-		&corev1.ServiceAccount{},
-		&storagev1.StorageClass{},
-	}
-
-	for _, obj := range resources {
-		if err := a.deleteResourcesByType(ctx, log, obj, namespace); err != nil {
-			log.Error(err, "Failed to delete resource", "type", fmt.Sprintf("%T", obj))
-		}
-	}
-
-	return nil
-}
-
-// createOrUpdate creates or updates a resource
-func (a *Actuator) createOrUpdate(ctx context.Context, log logr.Logger, obj client.Object, name string) error {
-	log.Info("Creating/Updating resource", "name", name, "type", fmt.Sprintf("%T", obj))
-
-	existing := obj.DeepCopyObject().(client.Object)
-	key := client.ObjectKeyFromObject(obj)
-
-	err := a.client.Get(ctx, key, existing)
+// generateManifests deploys all necessary resources to the shoot cluster
+func (a *Actuator) generateManifests(config *synology.ManifestConfig) ([]client.Object, error) {
+	secret, err := synology.GenerateSecret(config)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			if err := a.client.Create(ctx, obj); err != nil {
-				return fmt.Errorf("failed to create %s: %w", name, err)
-			}
-			log.Info("Created resource", "name", name)
-			return nil
-		}
-		return fmt.Errorf("failed to get %s: %w", name, err)
+		return nil, fmt.Errorf("failed to generate secret: %w", err)
 	}
 
-	obj.SetResourceVersion(existing.GetResourceVersion())
-	if err := a.client.Update(ctx, obj); err != nil {
-		return fmt.Errorf("failed to update %s: %w", name, err)
+	objects := []client.Object{
+		synology.GenerateServiceAccount(config.Namespace, constants.ControllerName),
+		synology.GenerateServiceAccount(config.Namespace, constants.NodeName),
+		synology.GenerateControllerClusterRole(),
+		synology.GenerateNodeClusterRole(),
+		synology.GenerateClusterRoleBinding(constants.ControllerName, config.Namespace, constants.ControllerName),
+		synology.GenerateClusterRoleBinding(constants.NodeName, config.Namespace, constants.NodeName),
+		secret,
+		synology.GenerateCSIDriver(),
+		synology.GenerateService(config.Namespace),
+		synology.GenerateControllerDeployment(config.Namespace),
+		synology.GenerateNodeDaemonSet(config.Namespace),
+		synology.GenerateStorageClass(config.Namespace),
+		synology.GenerateAllowAllEgressNetworkPolicy(config.Namespace),
 	}
 
-	log.Info("Updated resource", "name", name)
-	return nil
+	return objects, nil
 }
 
-// deleteResourcesByType deletes all resources of a given type
-func (a *Actuator) deleteResourcesByType(ctx context.Context, log logr.Logger, obj client.Object, namespace string) error {
-	listOpts := []client.DeleteAllOfOption{
-		client.InNamespace(namespace),
-		client.MatchingLabels{"app.kubernetes.io/name": "synology-csi"},
+func (a *Actuator) getAdminSynologySecret(ctx context.Context, cluster *extensions.Cluster, secretName string) (*corev1.Secret, error) {
+	fromShootResources := func() (*corev1.Secret, error) {
+		secretRef := helper.GetResourceByName(cluster.Shoot.Spec.Resources, secretName)
+		if secretRef == nil {
+			return nil, nil
+		}
+
+		secret := &corev1.Secret{}
+		err := controller.GetObjectByReference(ctx, a.client, &secretRef.ResourceRef, cluster.ObjectMeta.Name, secret)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get referenced secret: %w", err)
+		}
+
+		return secret, nil
 	}
 
-	list := &corev1.List{}
-	list.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
-
-	if err := a.client.DeleteAllOf(ctx, obj, listOpts...); err != nil && !errors.IsNotFound(err) {
-		return err
+	secret, err := fromShootResources()
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	if secret == nil {
+		return nil, fmt.Errorf("no admin synology secret found %q", secretName)
+	}
+
+	return secret, nil
+}
+
+func (a *Actuator) getShootSynologySecret(ctx context.Context, namespace string) (*corev1.Secret, error) {
+	_, shootClient, err := gutil.NewClientForShoot(ctx, a.client, namespace, client.Options{}, extensionsconfigv1alpha1.RESTOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create shoot client: %w", err)
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.SecretName,
+			Namespace: constants.ShootTargetNamespace,
+		},
+	}
+
+	err = shootClient.Get(ctx, client.ObjectKeyFromObject(secret), secret)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get synology-credentials: %w", err)
+	}
+
+	return secret, nil
+}
+
+func extractAdminSynologySecret(secret *corev1.Secret) (admin string, password string, err error) {
+	userBytes, ok := secret.Data[constants.SynologySecretAdminUserRef]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"referenced synology secret does not contain %q",
+			constants.SynologySecretAdminUserRef,
+		)
+	}
+
+	passwordBytes, ok := secret.Data[constants.SynologySecretAdminPasswordRef]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"referenced synology secret does not contain %q",
+			constants.SynologySecretAdminPasswordRef,
+		)
+	}
+
+	return string(userBytes), string(passwordBytes), nil
+}
+
+func extractShootSynologySecret(secret *corev1.Secret) (admin string, password string, err error) {
+	userBytes, ok := secret.Data[constants.SynologySecretShootUserRef]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"referenced synology secret does not contain %q",
+			constants.SynologySecretShootUserRef,
+		)
+	}
+
+	passwordBytes, ok := secret.Data[constants.SynologySecretShootPasswordRef]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"referenced synology secret does not contain %q",
+			constants.SynologySecretShootPasswordRef,
+		)
+	}
+
+	return string(userBytes), string(passwordBytes), nil
 }

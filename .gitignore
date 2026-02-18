@@ -37,3 +37,8 @@ charts/**/Chart.lock
 # Temporary files
 tmp/
 *.tmp
+
+# dsm
+dsm/
+*.pcap
+test.sh

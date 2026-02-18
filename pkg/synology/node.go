@@ -37,8 +37,10 @@ func GenerateNodeDaemonSet(namespace string) *appsv1.DaemonSet {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app.kubernetes.io/name":      "synology-csi",
-						"app.kubernetes.io/component": "node",
+						"app.kubernetes.io/name":                 "synology-csi",
+						"app.kubernetes.io/component":            "node",
+						"networking.gardener.cloud/to-apiserver": "allowed",
+						"networking.gardener.cloud/to-dns":       "allowed",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -237,9 +239,13 @@ func GenerateNodeDaemonSet(namespace string) *appsv1.DaemonSet {
 						{
 							Name: "client-info",
 							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: constants.ConfigMapName,
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: constants.SecretName,
+									Items: []corev1.KeyToPath{
+										{
+											Key:  "client-info.yaml",
+											Path: "client-info.yaml",
+										},
 									},
 								},
 							},

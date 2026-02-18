@@ -1,26 +1,24 @@
 ---
+apiVersion: core.gardener.cloud/v1
+kind: ControllerDeployment
+metadata:
+  name: csi-driver-synology
+helm:
+  rawChart: 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
+  values:
+    image:
+      tag: v0.0.1
+---
 apiVersion: core.gardener.cloud/v1beta1
 kind: ControllerRegistration
 metadata:
-  name: extension-csi-driver-synology
+  name: csi-driver-synology
+  annotations:
+    security.gardener.cloud/pod-security-enforce: baseline
 spec:
   deployment:
-    type: helm
-    providerConfig:
-      chart: <base64-encoded-helm-chart>
-      values:
-        image:
-          repository: your-registry/gardener-extension-csi-driver-synology
-          tag: v0.1.0
-        synology:
-          host: "192.168.1.100"
-          port: 5001
-          ssl: true
-          adminUsername: "admin"
-          adminPassword: "your-secure-password"
-        chap:
-          enabled: true
+    deploymentRefs:
+    - name: csi-driver-synology
   resources:
   - kind: Extension
     type: csi-driver-synology
-    globallyEnabled: false

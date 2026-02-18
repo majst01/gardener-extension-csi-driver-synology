@@ -2,11 +2,13 @@
 
 This extension integrates the [Synology CSI Driver](https://github.com/SynologyOpenSource/synology-csi) with Gardener.
 
+## Todos
+- deletion flow
+
 ## Features
 
 - Automatic deployment of Synology CSI driver to shoot clusters
 - Automatic user creation per shoot cluster on Synology NAS
-- iSCSI protocol support with CHAP authentication
 - Dynamic volume provisioning
 - Volume expansion support
 - Volume snapshot support
@@ -23,7 +25,23 @@ This extension integrates the [Synology CSI Driver](https://github.com/SynologyO
 can be started with a docker container like so:
 
 ```bash
-docker run -it --rm --name dsm -e "DISK_SIZE=256G" -p 5000:5000 --device=/dev/kvm --device=/dev/net/tun --cap-add NET_ADMIN -v "${PWD:-.}/dsm:/storage" --stop-timeout 120 docker.io/vdsm/virtual-dsm
+docker run -it --rm --name dsm \
+  --network kind \
+  -e "DISK_SIZE=256G" \
+  -p 5000:5000 \
+  -p 3260:3260 \
+  --device=/dev/kvm --device=/dev/net/tun --cap-add NET_ADMIN \
+  -v "${PWD:-.}/dsm:/storage" \
+  --stop-timeout 120 \
+  docker.io/vdsm/virtual-dsm
+```
+
+Reachability can be tested with:
+
+```bash
+kubectl run -it --rm nettest \
+  --image=curlimages/curl --restart=Never -- \
+  curl -4 -v --connect-timeout 5 --max-time 5 http://172.18.0.2:5000
 ```
 
 ## Configuration
@@ -44,9 +62,12 @@ providerConfig:
       ssl: true
       adminUsername: "admin"
       adminPassword: "your-admin-password"
-    chap:
-      enabled: true
+    # IMPORTANT: Chap is yet not implemented in synology csi-driver https://github.com/SynologyOpenSource/synology-csi/issues/63
+    # chap:
+    #   enabled: true
 ```
+
+After shoot got deployed a user will be created for the specific shoot. At the moment we need to manually add the user to the administrator and application groups.
 
 ## Usage in Shoot Cluster
 
