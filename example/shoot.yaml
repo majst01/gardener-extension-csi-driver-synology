@@ -21,6 +21,12 @@ spec:
         synologyURL: ""
         username: admin
         password: admin
+  resources:
+    - name: synology-admin-credentials
+      resourceRef:
+        apiVersion: v1
+        kind: Secret
+        name: synology-admin-credentials
   networking:
     type: calico
     nodes: 10.10.0.0/16

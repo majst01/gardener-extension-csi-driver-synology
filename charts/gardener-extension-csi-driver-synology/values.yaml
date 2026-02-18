@@ -29,17 +29,17 @@ config:
     burst: 130
 
 synology:
-  url: http://172.18.0.2:5000
-  secretRef: synology-credentials-info
+  url: http://172.18.0.3:5000
+  secretRef: synology-admin-credentials
   storageClasses:
     iscsi:
       parameters:
         protocol: iscsi
-        dsm: 172.18.0.2
+        dsm: 172.18.0.3
         fsType: ext4
         location: /volume1
         storageOptions: --no-discard
-        mountPemissions: 0750
+        mountPemissions: "0750"
 
 serviceAccount:
   create: true

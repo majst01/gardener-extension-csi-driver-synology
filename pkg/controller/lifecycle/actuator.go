@@ -66,12 +66,12 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	secret, err := a.findSynologySecret(ctx, cluster, a.config.SynologyConfig.SecretRef)
+	secret, err := a.getAdminSynologySecret(ctx, cluster, a.config.SynologyConfig.SecretRef)
 	if err != nil {
 		return err
 	}
 
-	adminUsername, adminPassword, err := extractSynologySecret(secret)
+	adminUsername, adminPassword, err := extractAdminSynologySecret(secret)
 	if err != nil {
 		return err
 	}
@@ -87,22 +87,40 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return fmt.Errorf("failed to create Synology client: %w", err)
 	}
 
-	// Login to Synology
 	if err := synologyClient.Login(); err != nil {
 		return fmt.Errorf("failed to login to Synology NAS: %w", err)
 	}
 	defer synologyClient.Logout()
 
-	// Generate credentials for this shoot
 	shootUsername := synology.GenerateShootUsername(shootName, shootNamespace)
-	shootPassword, err := synology.GenerateRandomPassword(16)
+	shootPassword := ""
+
+	user, err := synologyClient.GetUser(shootUsername)
 	if err != nil {
-		return fmt.Errorf("failed to generate password: %w", err)
+		return fmt.Errorf("failed to get user from Synology: %w", err)
 	}
 
-	// Create user on Synology
-	if err := synologyClient.CreateUser(shootUsername, shootPassword); err != nil {
-		return fmt.Errorf("failed to create user on Synology: %w", err)
+	if user == nil {
+		shootPassword, err = synology.GenerateRandomPassword(16)
+		if err != nil {
+			return fmt.Errorf("failed to generate password: %w", err)
+		}
+
+		if err := synologyClient.CreateUser(shootUsername, shootPassword); err != nil {
+			return fmt.Errorf("failed to create user on Synology: %w", err)
+		}
+	} else {
+		secret, err := a.getShootSynologySecret(ctx, cluster, a.config.SynologyConfig.SecretRef)
+		if err != nil {
+			return err
+		}
+
+		_, shootPwd, err := extractAdminSynologySecret(secret)
+		if err != nil {
+			return err
+		}
+
+		shootPassword = shootPwd
 	}
 
 	u, err := url.Parse(a.config.SynologyConfig.URL)
@@ -171,12 +189,12 @@ func (a *Actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 		return err
 	}
 
-	secret, err := a.findSynologySecret(ctx, cluster, a.config.SynologyConfig.SecretRef)
+	secret, err := a.getAdminSynologySecret(ctx, cluster, a.config.SynologyConfig.SecretRef)
 	if err != nil {
 		return err
 	}
 
-	adminUsername, adminPassword, err := extractSynologySecret(secret)
+	adminUsername, adminPassword, err := extractAdminSynologySecret(secret)
 	if err != nil {
 		return err
 	}
@@ -324,7 +342,7 @@ func (a *Actuator) deleteResourcesByType(ctx context.Context, obj client.Object,
 	return nil
 }
 
-func (a *Actuator) findSynologySecret(ctx context.Context, cluster *extensions.Cluster, secretName string) (*corev1.Secret, error) {
+func (a *Actuator) getAdminSynologySecret(ctx context.Context, cluster *extensions.Cluster, secretName string) (*corev1.Secret, error) {
 	fromShootResources := func() (*corev1.Secret, error) {
 		secretRef := helper.GetResourceByName(cluster.Shoot.Spec.Resources, secretName)
 		if secretRef == nil {
@@ -346,28 +364,76 @@ func (a *Actuator) findSynologySecret(ctx context.Context, cluster *extensions.C
 	}
 
 	if secret == nil {
-		return nil, fmt.Errorf("no synology secret found")
+		return nil, fmt.Errorf("no admin synology secret found %q", secretName)
 	}
 
 	return secret, nil
 }
 
-func extractSynologySecret(secret *corev1.Secret) (admin string, password string, err error) {
-	adminBytes, ok := secret.Data[constants.SynologySecretAdminRef]
+func (a *Actuator) getShootSynologySecret(ctx context.Context, cluster *extensions.Cluster, secretName string) (*corev1.Secret, error) {
+	fromShootResources := func() (*corev1.Secret, error) {
+		secretRef := helper.GetResourceByName(cluster.Shoot.Spec.Resources, secretName)
+		if secretRef == nil {
+			return nil, nil
+		}
+
+		secret := &corev1.Secret{}
+		err := controller.GetObjectByReference(ctx, a.client, &secretRef.ResourceRef, cluster.ObjectMeta.Name, secret)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get referenced secret: %w", err)
+		}
+
+		return secret, nil
+	}
+
+	secret, err := fromShootResources()
+	if err != nil {
+		return nil, err
+	}
+
+	if secret == nil {
+		return nil, fmt.Errorf("no shoot synology secret found %q", secretName)
+	}
+
+	return secret, nil
+}
+
+func extractAdminSynologySecret(secret *corev1.Secret) (admin string, password string, err error) {
+	userBytes, ok := secret.Data[constants.SynologySecretAdminUserRef]
 	if !ok {
 		return "", "", fmt.Errorf(
 			"referenced synology secret does not contain %q",
-			constants.SynologySecretAdminRef,
+			constants.SynologySecretAdminUserRef,
 		)
 	}
 
-	passwordBytes, ok := secret.Data[constants.SynologySecretPasswordRef]
+	passwordBytes, ok := secret.Data[constants.SynologySecretAdminPasswordRef]
 	if !ok {
 		return "", "", fmt.Errorf(
 			"referenced synology secret does not contain %q",
-			constants.SynologySecretPasswordRef,
+			constants.SynologySecretAdminPasswordRef,
 		)
 	}
 
-	return string(adminBytes), string(passwordBytes), nil
+	return string(userBytes), string(passwordBytes), nil
+}
+
+func extractShootSynologySecret(secret *corev1.Secret) (admin string, password string, err error) {
+	userBytes, ok := secret.Data[constants.SynologySecretShootUserRef]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"referenced synology secret does not contain %q",
+			constants.SynologySecretShootUserRef,
+		)
+	}
+
+	passwordBytes, ok := secret.Data[constants.SynologySecretShootPasswordRef]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"referenced synology secret does not contain %q",
+			constants.SynologySecretShootPasswordRef,
+		)
+	}
+
+	return string(userBytes), string(passwordBytes), nil
 }

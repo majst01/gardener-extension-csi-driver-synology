@@ -202,23 +202,91 @@ func (c *Client) CreateUser(username, password string) error {
 
 	if !result.Success {
 		code := extractCode(&result)
-		// User already exists (your previous behavior)
-		if code == 407 {
-			return nil
-		}
-		// Common DSM7 issue when token/sid missing/expired
-		if code == 119 {
-			// force relogin once and retry
-			c.sessionID, c.synoToken = "", ""
-			if err := c.ensureLogin(); err != nil {
-				return err
-			}
-			return c.CreateUser(username, password)
-		}
 		return fmt.Errorf("create user failed with error code: %d (body=%s)", code, string(body))
 	}
 
 	return nil
+}
+
+type getUserResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		// DSM liefert typischerweise "users": [ ... ]
+		Users []User `json:"users"`
+	} `json:"data"`
+	Error *apiError `json:"error,omitempty"`
+}
+
+// User is a minimal representation of a DSM user record.
+// (Field set can be expanded as needed.)
+type User struct {
+	Name string `json:"name,omitempty"`
+}
+
+// GetUser fetches a user by name using SYNO.Core.User/get.
+// Returns (nil, nil) if the user does not exist (code 407).
+func (c *Client) GetUser(username string) (*User, error) {
+	if err := c.ensureLogin(); err != nil {
+		return nil, err
+	}
+
+	u, err := url.Parse(c.webapiURL("entry.cgi"))
+	if err != nil {
+		return nil, fmt.Errorf("build get user url: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("api", "SYNO.Core.User")
+	q.Set("version", "1")
+	q.Set("method", "get")
+	q.Set("name", username)
+	q.Set("_sid", c.sessionID)
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("build get user request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-SYNO-TOKEN", c.synoToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("get user request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read get user response: %w", err)
+	}
+
+	var r getUserResponse
+	if err := decodeResult(body, &r); err != nil {
+		return nil, err
+	}
+
+	if !r.Success {
+		code := -1
+		if r.Error != nil {
+			code = r.Error.Code
+		}
+
+		// user not found (consistent with your other handling)
+		if code == 3106 {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("get user failed with error code: %d (body=%s)", code, string(body))
+	}
+
+	// DSM typically returns list; choose the first if present.
+	if len(r.Data.Users) == 0 {
+		// Defensive: success but empty result -> treat as not found
+		return nil, nil
+	}
+
+	return &r.Data.Users[0], nil
 }
 
 // DeleteUser deletes a user from the Synology NAS.
