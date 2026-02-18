@@ -301,34 +301,6 @@ func (a *Actuator) deleteResources(ctx context.Context, log logr.Logger, namespa
 	return nil
 }
 
-// createOrUpdate creates or updates a resource
-func (a *Actuator) createOrUpdate(ctx context.Context, log logr.Logger, obj client.Object, name string) error {
-	log.Info("Creating/Updating resource", "name", name, "type", fmt.Sprintf("%T", obj))
-
-	existing := obj.DeepCopyObject().(client.Object)
-	key := client.ObjectKeyFromObject(obj)
-
-	err := a.client.Get(ctx, key, existing)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			if err := a.client.Create(ctx, obj); err != nil {
-				return fmt.Errorf("failed to create %s: %w", name, err)
-			}
-			log.Info("Created resource", "name", name)
-			return nil
-		}
-		return fmt.Errorf("failed to get %s: %w", name, err)
-	}
-
-	obj.SetResourceVersion(existing.GetResourceVersion())
-	if err := a.client.Update(ctx, obj); err != nil {
-		return fmt.Errorf("failed to update %s: %w", name, err)
-	}
-
-	log.Info("Updated resource", "name", name)
-	return nil
-}
-
 // deleteResourcesByType deletes all resources of a given type
 func (a *Actuator) deleteResourcesByType(ctx context.Context, obj client.Object, namespace string) error {
 	listOpts := []client.DeleteAllOfOption{
