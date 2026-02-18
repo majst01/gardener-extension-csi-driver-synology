@@ -10,7 +10,6 @@ import (
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	gutil "github.com/gardener/gardener/extensions/pkg/util"
-	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
@@ -21,13 +20,9 @@ import (
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/apis/csidriversynology/v1alpha1"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/constants"
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/synology"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	rbacv1 "k8s.io/api/rbac/v1"
-	storagev1 "k8s.io/api/storage/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -139,7 +134,7 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	// Create manifest config
 	manifestConfig := &synology.ManifestConfig{
-		Namespace: "kube-system",
+		Namespace: constants.ShootTargetNamespace,
 		Url:       a.config.SynologyConfig.URL,
 		Username:  shootUsername,
 		Password:  shootPassword,
@@ -182,57 +177,6 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 // Delete the Extension resource
 func (a *Actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
-	namespace := ex.GetNamespace()
-	shootName := namespace
-	shootNamespace := namespace
-
-	log.Info("Deleting Synology CSI extension", "namespace", namespace)
-
-	cluster, err := controller.GetCluster(ctx, a.client, namespace)
-	if err != nil {
-		return err
-	}
-
-	secret, err := a.getAdminSynologySecret(ctx, cluster, a.config.SynologyConfig.SecretRef)
-	if err != nil {
-		return err
-	}
-
-	adminUsername, adminPassword, err := extractAdminSynologySecret(secret)
-	if err != nil {
-		return err
-	}
-
-	// Create Synology client
-	synologyClient, err := synology.NewClient(
-		a.config.SynologyConfig.URL,
-		adminUsername,
-		adminPassword,
-	)
-
-	if err != nil {
-		return fmt.Errorf("unable to create Synology client: %w", err)
-	}
-
-	// Login to Synology
-	if err := synologyClient.Login(); err != nil {
-		log.Error(err, "Failed to login to Synology NAS, continuing with resource deletion")
-	} else {
-		defer synologyClient.Logout()
-
-		// Delete user from Synology
-		shootUsername := synology.GenerateShootUsername(shootName, shootNamespace)
-		if err := synologyClient.DeleteUser(shootUsername); err != nil {
-			log.Error(err, "Failed to delete user from Synology", "username", shootUsername)
-		}
-	}
-
-	// Delete resources from shoot cluster
-	if err := a.deleteResources(ctx, log, v1beta1constants.GardenNamespace); err != nil {
-		return fmt.Errorf("failed to delete resources: %w", err)
-	}
-
-	log.Info("Successfully deleted Synology CSI extension")
 	return nil
 }
 
@@ -248,7 +192,7 @@ func (a *Actuator) Migrate(ctx context.Context, log logr.Logger, ex *extensionsv
 
 // ForceDelete forcefully deletes the Extension resource
 func (a *Actuator) ForceDelete(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
-	return a.Delete(ctx, log, ex)
+	return nil
 }
 
 // generateManifests deploys all necessary resources to the shoot cluster
@@ -275,47 +219,6 @@ func (a *Actuator) generateManifests(config *synology.ManifestConfig) ([]client.
 	}
 
 	return objects, nil
-}
-
-// deleteResources deletes all resources from the shoot cluster
-func (a *Actuator) deleteResources(ctx context.Context, log logr.Logger, namespace string) error {
-	resources := []client.Object{
-		&appsv1.DaemonSet{},
-		&appsv1.Deployment{},
-		&corev1.Service{},
-		&storagev1.CSIDriver{},
-		&corev1.ConfigMap{},
-		&corev1.Secret{},
-		&rbacv1.ClusterRoleBinding{},
-		&rbacv1.ClusterRole{},
-		&corev1.ServiceAccount{},
-		&storagev1.StorageClass{},
-	}
-
-	for _, obj := range resources {
-		if err := a.deleteResourcesByType(ctx, obj, namespace); err != nil {
-			log.Error(err, "Failed to delete resource", "type", fmt.Sprintf("%T", obj))
-		}
-	}
-
-	return nil
-}
-
-// deleteResourcesByType deletes all resources of a given type
-func (a *Actuator) deleteResourcesByType(ctx context.Context, obj client.Object, namespace string) error {
-	listOpts := []client.DeleteAllOfOption{
-		client.InNamespace(namespace),
-		client.MatchingLabels{"app.kubernetes.io/name": "synology-csi"},
-	}
-
-	list := &corev1.List{}
-	list.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
-
-	if err := a.client.DeleteAllOf(ctx, obj, listOpts...); err != nil && !errors.IsNotFound(err) {
-		return err
-	}
-
-	return nil
 }
 
 func (a *Actuator) getAdminSynologySecret(ctx context.Context, cluster *extensions.Cluster, secretName string) (*corev1.Secret, error) {
@@ -355,7 +258,7 @@ func (a *Actuator) getShootSynologySecret(ctx context.Context, namespace string)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      constants.SecretName,
-			Namespace: "kube-system",
+			Namespace: constants.ShootTargetNamespace,
 		},
 	}
 

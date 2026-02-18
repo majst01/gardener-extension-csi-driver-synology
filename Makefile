@@ -33,7 +33,7 @@ tidy:
 
 .PHONY: build
 build:
-	go build -ldflags $(LD_FLAGS) -tags netgo -o bin/gardener-extension-csi-driver-synology./cmd/gardener-extension-csi-driver-synology
+	go build -ldflags $(LD_FLAGS) -tags netgo -o bin/gardener-extension-csi-driver-synology./cmd/gardener-extension-csi-driver-synology ./cmd/gardener-extension-csi-driver-synology
 
 .PHONY: install
 install: tidy $(HELM)

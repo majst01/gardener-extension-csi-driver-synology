@@ -3,8 +3,6 @@
 This extension integrates the [Synology CSI Driver](https://github.com/SynologyOpenSource/synology-csi) with Gardener.
 
 ## Todos
-- idempotent reconcile (user creation)
-- mounting volume not working: "iscsiadm: Could not perform SendTargets discovery: could not connect to iscsid"
 - deletion flow
 
 ## Features

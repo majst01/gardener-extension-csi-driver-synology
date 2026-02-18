@@ -1,6 +1,9 @@
 package constants
 
 const (
+	// ShootTargetNamespace is the namespace in the shoot for the manifests
+	ShootTargetNamespace = "kube-system"
+
 	// ExtensionType is the name of the extension type
 	ExtensionType = "csi-driver-synology"
 
@@ -64,7 +67,6 @@ const (
 	// ImageCSILivenessProbe is the image for the CSI liveness probe
 	ImageCSILivenessProbe = "registry.k8s.io/sig-storage/livenessprobe:v2.14.0"
 
-	//
 	SynologySecretAdminUserRef     = "adminUser"
 	SynologySecretAdminPasswordRef = "adminPassword"
 

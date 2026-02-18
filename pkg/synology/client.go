@@ -289,69 +289,6 @@ func (c *Client) GetUser(username string) (*User, error) {
 	return &r.Data.Users[0], nil
 }
 
-// DeleteUser deletes a user from the Synology NAS.
-// Uses GET + query params and sends X-SYNO-TOKEN.
-func (c *Client) DeleteUser(username string) error {
-	if err := c.ensureLogin(); err != nil {
-		return err
-	}
-
-	u, err := url.Parse(c.webapiURL("entry.cgi"))
-	if err != nil {
-		return fmt.Errorf("build delete user url: %w", err)
-	}
-
-	q := u.Query()
-	q.Set("api", "SYNO.Core.User")
-	q.Set("version", "1")
-	q.Set("method", "delete")
-	q.Set("name", username)
-	q.Set("_sid", c.sessionID)
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
-	if err != nil {
-		return fmt.Errorf("build delete user request: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-SYNO-TOKEN", c.synoToken)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to delete user: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var result simpleResult
-	if err := decodeResult(body, &result); err != nil {
-		return err
-	}
-
-	if !result.Success {
-		code := extractCode(&result)
-		// Ignore error if user doesn't exist (your previous behavior)
-		if code == 407 {
-			return nil
-		}
-		if code == 119 {
-			// force relogin once and retry
-			c.sessionID, c.synoToken = "", ""
-			if err := c.ensureLogin(); err != nil {
-				return err
-			}
-			return c.DeleteUser(username)
-		}
-		return fmt.Errorf("delete user failed with error code: %d (body=%s)", code, string(body))
-	}
-
-	return nil
-}
-
 // Logout ends the session.
 // Uses session=Core and sends X-SYNO-TOKEN (safe) + _sid.
 func (c *Client) Logout() error {
