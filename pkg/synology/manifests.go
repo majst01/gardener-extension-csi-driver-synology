@@ -329,6 +329,8 @@ func GenerateSecret(config *ManifestConfig) (*corev1.Secret, error) {
 		Type: corev1.SecretTypeOpaque,
 		StringData: map[string]string{
 			"client-info.yaml": clientInfoYAML,
+			"user":             config.Username,
+			"password":         config.Password,
 		},
 	}
 	return secret, nil

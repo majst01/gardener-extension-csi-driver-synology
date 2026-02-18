@@ -6,8 +6,10 @@ import (
 	"net/url"
 	"strconv"
 
+	extensionsconfigv1alpha1 "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
+	gutil "github.com/gardener/gardener/extensions/pkg/util"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -21,6 +23,8 @@ import (
 	"github.com/metal-stack/gardener-extension-csi-driver-synology/pkg/synology"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -110,12 +114,12 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 			return fmt.Errorf("failed to create user on Synology: %w", err)
 		}
 	} else {
-		secret, err := a.getShootSynologySecret(ctx, cluster, a.config.SynologyConfig.SecretRef)
+		secret, err := a.getShootSynologySecret(ctx, ex.Namespace)
 		if err != nil {
 			return err
 		}
 
-		_, shootPwd, err := extractAdminSynologySecret(secret)
+		_, shootPwd, err := extractShootSynologySecret(secret)
 		if err != nil {
 			return err
 		}
@@ -370,29 +374,22 @@ func (a *Actuator) getAdminSynologySecret(ctx context.Context, cluster *extensio
 	return secret, nil
 }
 
-func (a *Actuator) getShootSynologySecret(ctx context.Context, cluster *extensions.Cluster, secretName string) (*corev1.Secret, error) {
-	fromShootResources := func() (*corev1.Secret, error) {
-		secretRef := helper.GetResourceByName(cluster.Shoot.Spec.Resources, secretName)
-		if secretRef == nil {
-			return nil, nil
-		}
-
-		secret := &corev1.Secret{}
-		err := controller.GetObjectByReference(ctx, a.client, &secretRef.ResourceRef, cluster.ObjectMeta.Name, secret)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get referenced secret: %w", err)
-		}
-
-		return secret, nil
-	}
-
-	secret, err := fromShootResources()
+func (a *Actuator) getShootSynologySecret(ctx context.Context, namespace string) (*corev1.Secret, error) {
+	_, shootClient, err := gutil.NewClientForShoot(ctx, a.client, namespace, client.Options{}, extensionsconfigv1alpha1.RESTOptions{})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create shoot client: %w", err)
 	}
 
-	if secret == nil {
-		return nil, fmt.Errorf("no shoot synology secret found %q", secretName)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.SecretName,
+			Namespace: "kube-system",
+		},
+	}
+
+	err = shootClient.Get(ctx, client.ObjectKeyFromObject(secret), secret)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get synology-credentials: %w", err)
 	}
 
 	return secret, nil
