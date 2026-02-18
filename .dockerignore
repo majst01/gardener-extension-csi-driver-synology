@@ -1,0 +1,10 @@
+.git
+.github
+.gitignore
+.dockerignore
+*.md
+example/
+hack/
+dist/
+.idea/
+.vscode/

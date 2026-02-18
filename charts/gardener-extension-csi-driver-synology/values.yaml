@@ -1,0 +1,52 @@
+image:
+  repository: ghcr.io/metal-stack/gardener-extension-csi-driver-synology
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+controllers:
+  concurrentSyncs: 5
+  healthcheck:
+    concurrentSyncs: 5
+  heartbeat:
+    renewIntervalSeconds: 30
+  ignoreOperationAnnotation: false
+
+config:
+  clientConnection:
+    acceptContentTypes: application/json
+    contentType: application/json
+    qps: 100
+    burst: 130
+
+synology:
+  url: http://172.18.0.3:5000
+  secretRef: synology-admin-credentials
+  storageClasses:
+    iscsi:
+      parameters:
+        protocol: iscsi
+        dsm: 172.18.0.3
+        fsType: ext4
+        location: /volume1
+        storageOptions: --no-discard
+        mountPemissions: "0750"
+
+serviceAccount:
+  create: true
+  name: gardener-extension-csi-driver-synology
+
+rbac:
+  create: true
+
+gardener:
+  version: ""
