@@ -63,4 +63,8 @@ const (
 
 	// ImageCSILivenessProbe is the image for the CSI liveness probe
 	ImageCSILivenessProbe = "registry.k8s.io/sig-storage/livenessprobe:v2.14.0"
+
+	//
+	SynologySecretAdminRef    = "admin"
+	SynologySecretPasswordRef = "password"
 )

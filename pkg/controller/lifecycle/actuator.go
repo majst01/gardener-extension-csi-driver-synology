@@ -8,8 +8,8 @@ import (
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
-	"github.com/gardener/gardener/pkg/apis/core/helper"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/extensions"
@@ -61,13 +61,26 @@ func (a *Actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	log.Info("Reconciling Synology CSI extension", "namespace", namespace)
 
-	//TODO extract credentials from secret
+	cluster, err := controller.GetCluster(ctx, a.client, namespace)
+	if err != nil {
+		return err
+	}
+
+	secret, err := a.findSynologySecret(ctx, cluster, a.config.SynologyConfig.SecretRef)
+	if err != nil {
+		return err
+	}
+
+	adminUsername, adminPassword, err := extractSynologySecret(secret)
+	if err != nil {
+		return err
+	}
 
 	// Create Synology client
 	synologyClient, err := synology.NewClient(
 		a.config.SynologyConfig.URL,
-		a.config.AdminUsername,
-		a.config.AdminPassword,
+		adminUsername,
+		adminPassword,
 	)
 
 	if err != nil {
@@ -153,11 +166,26 @@ func (a *Actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 
 	log.Info("Deleting Synology CSI extension", "namespace", namespace)
 
+	cluster, err := controller.GetCluster(ctx, a.client, namespace)
+	if err != nil {
+		return err
+	}
+
+	secret, err := a.findSynologySecret(ctx, cluster, a.config.SynologyConfig.SecretRef)
+	if err != nil {
+		return err
+	}
+
+	adminUsername, adminPassword, err := extractSynologySecret(secret)
+	if err != nil {
+		return err
+	}
+
 	// Create Synology client
 	synologyClient, err := synology.NewClient(
-		a.config.SynologyURL,
-		a.config.AdminUsername,
-		a.config.AdminPassword,
+		a.config.SynologyConfig.URL,
+		adminUsername,
+		adminPassword,
 	)
 
 	if err != nil {
@@ -318,17 +346,28 @@ func (a *Actuator) findSynologySecret(ctx context.Context, cluster *extensions.C
 	}
 
 	if secret == nil {
-		// if the secret is not referenced in the shoot resources it may be defined in the default backend secrets
-		if len(defaultBackendSecrets) > 0 {
-			var ok bool
-			secret, ok = defaultBackendSecrets[secretName]
-			if !ok {
-				return nil, fmt.Errorf("secret resource with name %q not found in default backend secrets", secretName)
-			}
-		} else {
-			return nil, fmt.Errorf("secret resource with name %q not found in shoot resources", secretName)
-		}
+		return nil, fmt.Errorf("no synology secret found")
 	}
 
 	return secret, nil
+}
+
+func extractSynologySecret(secret *corev1.Secret) (admin string, password string, err error) {
+	adminBytes, ok := secret.Data[constants.SynologySecretAdminRef]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"referenced synology secret does not contain %q",
+			constants.SynologySecretAdminRef,
+		)
+	}
+
+	passwordBytes, ok := secret.Data[constants.SynologySecretPasswordRef]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"referenced synology secret does not contain %q",
+			constants.SynologySecretPasswordRef,
+		)
+	}
+
+	return string(adminBytes), string(passwordBytes), nil
 }
